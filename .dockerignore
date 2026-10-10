@@ -18,3 +18,7 @@ README.md
 LICENSE
 railway.json
 render.yaml
+# The Android project and its web bundle are not part of the web image.
+android
+dist-android
+.shots

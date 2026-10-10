@@ -72,6 +72,10 @@ jobs:
       - name: Static server integration tests
         run: npm run test:server
 
+      # The Android app bundle (packaged into the APK by the Android workflow).
+      - name: Mobile bundle
+        run: npm run build:mobile
+
       - name: Upload build output
         uses: actions/upload-artifact@v4
         with:
@@ -125,7 +129,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run browser tests
-        run: npx playwright test --project=desktop --project=mobile
+        run: npx playwright test --project=desktop --project=mobile --project=android
 
       - name: Upload Playwright report
         if: failure()
