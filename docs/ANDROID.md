@@ -206,7 +206,12 @@ range metadata (data: `venelinkochev/bin-list-data`, CC BY 4.0).
   can take several seconds while the service wakes up.
 - Settings → **Check service status** calls `/readyz` only when tapped.
 
-Generator, Card Sorter and Settings never make network requests.
+Generator, Card Sorter and Settings never make network requests. The first-launch
+community dialog has two optional, explicit external links: YoriMethods
+(`https://t.me/+y8EekRvqpnQzNjZl`) and Chat Group
+(`https://t.me/+nzIAZDVK_61lZDQ9`). Tapping one asks Android to handle its HTTPS
+URL (Telegram if registered, otherwise the browser); merely showing the dialog
+makes no request. No Telegram installation or additional permission is required.
 
 ## Permissions and privacy
 
@@ -219,8 +224,9 @@ No storage, camera, location or contacts permissions are requested, and the
 manifest strips broad storage permissions even if a future dependency asks for
 them. The Android CI workflow fails if the built APK requests any other permission.
 
-- Only the theme choice is persisted (Capacitor Preferences). Inputs, results
-  and recent lookups live in memory and are gone when the app is closed.
+- The theme choice and community-dialog dismissal are persisted (Capacitor
+  Preferences). Inputs, results and recent lookups live in memory and are gone
+  when the app is closed.
 - Exports are written to the app's private cache (`cache/exports/`) and handed
   to the Android share sheet through a `FileProvider` scoped to that folder.
 - Cloud backup and device-to-device transfer are disabled
@@ -274,6 +280,12 @@ or the contrast ratios drift apart.
 - **Startup**: no timed splash screen. The window is charcoal from the first
   frame, and the system splash on Android 12+ is dismissed as soon as the app
   draws.
+- **Community**: on the first launch, a dismissible dialog offers two Telegram
+  invites. Close, Maybe later, Back, backdrop, Escape or choosing an invite
+  saves a single `community.dismissed.v1` flag in Preferences; later launches
+  do not show it again. Navigation never reopens it. If preferences cannot be
+  read or saved, the dialog can still be closed and stays closed for this app
+  session (but may return on a future launch). Clearing app data resets it.
 
 ## Project layout
 

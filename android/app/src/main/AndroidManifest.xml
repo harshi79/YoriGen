@@ -4,7 +4,7 @@
 
     <!--
       Backups and device transfer are off: the app keeps nothing worth restoring
-      (only the theme preference), and nothing should leave the device that way.
+      (only theme and community-dismissal preferences), and nothing should leave the device that way.
       Cleartext traffic is off: the only network service is reached over HTTPS.
     -->
     <application
