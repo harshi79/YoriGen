@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ORIGEN splash mark for the Android 12+ system splash screen.
+
+  This is the same braces mark as the launcher icon and the favicon, drawn in
+  mint (#D1F58A) because the splash window is charcoal (@color/origen_background,
+  #101210) — the launcher foreground's dark ink is meant for the mint adaptive
+  background and is unreadable here (1.4:1). Mint on charcoal is 15.4:1.
+
+  Geometry follows the splash-screen spec for an icon with no background: a
+  288dp canvas whose content fits inside the central 192dp circle; everything
+  outside that circle is masked. The mark's inked box is 137x126dp, so its
+  circumscribing circle is 186dp and nothing is clipped.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="288"
+    android:viewportHeight="288">
+    <group
+        android:scaleX="5.6"
+        android:scaleY="5.6"
+        android:translateX="32"
+        android:translateY="32">
+        <path
+            android:pathData="M15,10h-3v7l-3,3 3,3v7h3m10,-20h3v7l3,3 -3,3v7h-3"
+            android:strokeColor="#D1F58A"
+            android:strokeWidth="2.5"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:fillColor="#00000000" />
+    </group>
+</vector>
