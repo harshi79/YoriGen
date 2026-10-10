@@ -1,0 +1,13 @@
+# Render blueprint for ORIGEN.
+# The app is a static Vite build served by server.js (no framework server needed).
+services:
+  - type: web
+    name: origen
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production

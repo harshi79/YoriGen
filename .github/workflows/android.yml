@@ -1,0 +1,112 @@
+name: Android
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Also build a release APK (signed only if signing secrets are configured)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    name: Build APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web bundle and sync Capacitor
+        run: npm run android:sync
+
+      - name: Assemble debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      # Fails the build if the APK asks for anything beyond network access.
+      - name: Inspect APK
+        run: |
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          AAPT2="$ANDROID_HOME/build-tools/36.0.0/aapt2"
+          "$AAPT2" dump badging "$APK" | grep -E "^(package|sdkVersion|targetSdkVersion|application-label):"
+          "$AAPT2" dump permissions "$APK"
+          unexpected=$("$AAPT2" dump permissions "$APK" \
+            | sed -n "s/^uses-permission: name='\([^']*\)'.*/\1/p" \
+            | grep -v -x -e android.permission.INTERNET -e android.permission.ACCESS_NETWORK_STATE \
+            | grep -v -e '\.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION$' || true)
+          if [ -n "$unexpected" ]; then
+            echo "::error::Unexpected permissions: $unexpected"
+            exit 1
+          fi
+          ls -l "$APK"
+          sha256sum "$APK"
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: origen-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+          if-no-files-found: error
+
+      # Release builds run only on manual dispatch. The keystore and passwords
+      # come from repository secrets and never touch the repository.
+      - name: Assemble release APK
+        if: github.event_name == 'workflow_dispatch' && inputs.release
+        working-directory: android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ORIGEN_KEYSTORE_BASE64 }}
+          ORIGEN_KEYSTORE_PASSWORD: ${{ secrets.ORIGEN_KEYSTORE_PASSWORD }}
+          ORIGEN_KEY_ALIAS: ${{ secrets.ORIGEN_KEY_ALIAS }}
+          ORIGEN_KEY_PASSWORD: ${{ secrets.ORIGEN_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            export ORIGEN_KEYSTORE_PATH="$RUNNER_TEMP/origen-release.jks"
+            echo "$KEYSTORE_BASE64" | base64 --decode > "$ORIGEN_KEYSTORE_PATH"
+          else
+            echo "::warning::No signing secrets configured; the release APK will be unsigned."
+          fi
+          ./gradlew assembleRelease --no-daemon --stacktrace
+          rm -f "$RUNNER_TEMP/origen-release.jks"
+
+      - name: Upload release APK
+        if: github.event_name == 'workflow_dispatch' && inputs.release
+        uses: actions/upload-artifact@v4
+        with:
+          name: origen-release-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          retention-days: 14
+          if-no-files-found: error
