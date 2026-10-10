@@ -17,6 +17,7 @@
   --warn-soft: rgba(245, 201, 138, 0.1);
   --danger: #ff9b8f;
   --danger-soft: rgba(255, 155, 143, 0.12);
+  --danger-ink: #2b0b07;
   --focus: #a3cb60;
   --mono: ui-monospace, "SFMono-Regular", "Roboto Mono", "Droid Sans Mono", Consolas, monospace;
   --radius: 14px;
@@ -55,6 +56,7 @@
   --warn-soft: rgba(200, 140, 40, 0.12);
   --danger: #b3261e;
   --danger-soft: rgba(179, 38, 30, 0.08);
+  --danger-ink: #ffffff;
   --focus: #5f8a1f;
   color-scheme: light;
 }
@@ -729,9 +731,11 @@ select.control {
   background: transparent;
   color: var(--muted);
 }
+/* Danger is a pale surface in Dark and a deep one in Light, so the ink on it
+   has to follow the theme: 9.0:1 dark, 6.5:1 light. */
 .btn-danger {
   background: var(--danger);
-  color: #2b0b07;
+  color: var(--danger-ink);
 }
 .btn-block {
   width: 100%;
@@ -1179,7 +1183,7 @@ select.control {
 }
 .toast-error {
   background: var(--danger);
-  color: #2b0b07;
+  color: var(--danger-ink);
 }
 @keyframes toast-in {
   from {
