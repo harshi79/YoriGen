@@ -238,3 +238,22 @@ for (const width of [320, 360, 412]) {
     }
   });
 }
+
+test("nav labels, action buttons and the theme control are not truncated at 320px", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto("/");
+  for (const tool of TOOLS) {
+    await nav(page, tool.id).tap();
+    const clipped = await page.evaluate((id) => {
+      const visible = (element: Element) => (element as HTMLElement).offsetParent !== null;
+      const labels = [...document.querySelectorAll<HTMLElement>(".bottom-nav .nav-label")];
+      const buttons = [...document.querySelectorAll<HTMLElement>(`.screen-host[data-screen="${id}"] .action-bar .btn span`)];
+      const segments = [...document.querySelectorAll<HTMLElement>(`.screen-host[data-screen="${id}"] .segment`)];
+      return [...labels, ...buttons, ...segments]
+        .filter(visible)
+        .filter((element) => element.scrollWidth > element.clientWidth + 1)
+        .map((element) => element.textContent?.trim() ?? "");
+    }, tool.id);
+    expect(clipped, `truncated text on ${tool.id}`).toEqual([]);
+  }
+});

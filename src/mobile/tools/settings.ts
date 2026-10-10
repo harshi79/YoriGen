@@ -64,7 +64,7 @@ function createSettingsScreen(context: ToolContext): ToolScreen {
   );
 
   const statusBadge = h("span", { class: "badge", id: "settings-api-state" }, "NOT CHECKED");
-  const statusText = h("p", { class: "hint", id: "settings-api-status" }, "Status is checked only when you ask. No BIN is sent.");
+  const statusText = h("p", { class: "hint", id: "settings-api-status", "aria-live": "polite" }, "Status is checked only when you ask. No BIN is sent.");
   let checking: AbortController | null = null;
   const checkButton = button({
     label: "Check service status",
@@ -95,10 +95,15 @@ function createSettingsScreen(context: ToolContext): ToolScreen {
 
   const versionValue = h("span", { class: "mono" }, config.version);
   const buildValue = h("span", { class: "mono" }, "—");
-  void platform.app.info().then((info) => {
-    versionValue.textContent = info.version || config.version;
-    buildValue.textContent = info.build || "—";
-  });
+  platform.app
+    .info()
+    .then((info) => {
+      versionValue.textContent = info.version || config.version;
+      buildValue.textContent = info.build || "—";
+    })
+    .catch(() => {
+      /* Keep the build-time version when app info is unavailable. */
+    });
 
   const scroller = h(
     "div",

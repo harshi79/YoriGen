@@ -8,7 +8,7 @@
   --line: #262a25;
   --text: #e9eae6;
   --muted: #a1a79c;
-  --faint: #7d8577;
+  --faint: #8a9284;
   --accent: #d1f58a;
   --accent-ink: #253119;
   --accent-soft: rgba(209, 245, 138, 0.1);
@@ -46,7 +46,7 @@
   --line: #e5e9df;
   --text: #20271c;
   --muted: #56604d;
-  --faint: #6b7563;
+  --faint: #5b6450;
   --accent: #c9ed83;
   --accent-ink: #26341a;
   --accent-soft: rgba(110, 150, 40, 0.1);
@@ -1296,6 +1296,34 @@ select.control {
   .action-bar {
     padding-left: max(16px, calc(50% - 300px));
     padding-right: max(16px, calc(50% - 300px));
+  }
+}
+
+/* ---------- Narrow phones (320–359px) ---------- */
+.action-summary {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+@media (max-width: 359px) {
+  .nav-indicator {
+    width: 52px;
+  }
+  .nav-label {
+    font-size: 11px;
+    letter-spacing: 0;
+  }
+  .segment {
+    padding: 6px 4px;
+    font-size: 14px;
+  }
+  .action-bar-row > .btn {
+    gap: 6px;
+    padding-left: 10px;
+    padding-right: 10px;
+    font-size: 14px;
   }
 }
 
