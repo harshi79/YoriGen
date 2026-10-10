@@ -31,6 +31,11 @@ async function collectErrors(page: Page) {
 const nav = (page: Page, id: string) => page.locator(`.bottom-nav [data-tool="${id}"]`);
 const screen = (page: Page, id: string) => page.locator(`.screen-host[data-screen="${id}"]`);
 
+// Existing tool tests represent returning users; first launch is covered in community.spec.ts.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("origen.community.dismissed.v1", "true"));
+});
+
 test.describe("ORIGEN Android shell", () => {
   test("starts from bundled assets with no external requests or errors", async ({ page }) => {
     const external = await isolate(page);

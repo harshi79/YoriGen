@@ -8,6 +8,7 @@ import { ThemeController } from "./core/theme";
 import { createPlatform } from "./platform";
 import { createGuisonService } from "./services/bin-service";
 import { mountShell, renderFatal } from "./shell";
+import { createCommunityPrompt } from "./ui/community";
 import { createDefaultRegistry, START_TOOL } from "./tools";
 
 async function boot() {
@@ -23,7 +24,7 @@ async function boot() {
     await theme.load().catch(() => {
       /* Defaults apply if preferences cannot be read. */
     });
-    mountShell({
+    const shell = mountShell({
       host,
       registry: createDefaultRegistry(),
       startId: START_TOOL,
@@ -41,6 +42,9 @@ async function boot() {
       },
     });
     document.documentElement.classList.add("ready");
+    // Community is a launch prompt, not a tool or a navigation destination.
+    // Do not wait for storage before letting the shell become usable.
+    void createCommunityPrompt(platform.storage, shell.context.ui.sheets, platform.kind).showIfNeeded();
   } catch (error) {
     renderFatal(host, error);
   }
