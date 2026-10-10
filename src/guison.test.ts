@@ -69,6 +69,11 @@ describe('Guison request isolation and errors', () => {
   it('checks readiness without a BIN', async () => {
     const fetchMock = vi.fn().mockResolvedValue(response({ status: 'ready' })); vi.stubGlobal('fetch', fetchMock); await checkApiStatus(); expect(fetchMock.mock.calls[0][0]).toBe(`${GUISON_ORIGIN}/readyz`);
   });
+  it('sends lookups and readiness checks to a configured origin', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(response(guisonFixture('004242'))).mockResolvedValueOnce(response({ status: 'ready' })); vi.stubGlobal('fetch', fetchMock);
+    await lookupBin('004242', undefined, 'https://bin.example.com'); await checkApiStatus(undefined, 'https://bin.example.com');
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual(['https://bin.example.com/v1/bin/004242', 'https://bin.example.com/readyz']);
+  });
   it('rejects liveness that is not dataset readiness', async () => { vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ status: 'ok' }))); await expect(checkApiStatus()).rejects.toMatchObject({ code: 'unavailable' }); });
 });
 describe('page-session history', () => {

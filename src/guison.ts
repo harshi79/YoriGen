@@ -66,7 +66,7 @@ export function parseMetadata(value: unknown, requestedBin: string): BinMetadata
 function flagFromCode(code: string | null): string | null {
   return code && /^[A-Z]{2}$/.test(code) ? Array.from(code, char => String.fromCodePoint(127397 + char.charCodeAt(0))).join('') : null;
 }
-async function request(path: string, signal?: AbortSignal): Promise<unknown> {
+async function request(path: string, signal?: AbortSignal, origin: string = GUISON_ORIGIN): Promise<unknown> {
   const controller = new AbortController();
   let timedOut = false;
   const abort = () => controller.abort();
@@ -74,7 +74,7 @@ async function request(path: string, signal?: AbortSignal): Promise<unknown> {
   signal?.addEventListener('abort', abort, { once: true });
   const timer = setTimeout(() => { timedOut = true; controller.abort(); }, LOOKUP_TIMEOUT_MS);
   try {
-    const response = await fetch(`${GUISON_ORIGIN}${path}`, {
+    const response = await fetch(`${origin}${path}`, {
       method: 'GET', credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store', redirect: 'error',
       headers: { Accept: 'application/json' }, signal: controller.signal,
     });
@@ -108,12 +108,16 @@ async function request(path: string, signal?: AbortSignal): Promise<unknown> {
     throw new LookupError('unavailable', 'Could not reach Guison. Check your connection or try later. Local generation is unaffected.');
   } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
 }
-export async function lookupBin(bin: string, signal?: AbortSignal): Promise<BinMetadata> {
+/**
+ * `origin` defaults to the public Guison deployment. Passing another origin lets
+ * a self-hosted Guison-compatible service replace it without code changes.
+ */
+export async function lookupBin(bin: string, signal?: AbortSignal, origin: string = GUISON_ORIGIN): Promise<BinMetadata> {
   validateBin(bin); // Must run before constructing a URL or making any request.
-  return parseMetadata(await request(`/v1/bin/${bin}`, signal), bin);
+  return parseMetadata(await request(`/v1/bin/${bin}`, signal, origin), bin);
 }
-export async function checkApiStatus(signal?: AbortSignal): Promise<void> {
-  const value = object(await request('/readyz', signal));
+export async function checkApiStatus(signal?: AbortSignal, origin: string = GUISON_ORIGIN): Promise<void> {
+  const value = object(await request('/readyz', signal, origin));
   if (value?.status !== 'ready') throw new LookupError('unavailable', 'Guison is reachable but its metadata dataset is not ready.');
 }
 export function metadataEntries(data: BinMetadata): [string, string][] {
