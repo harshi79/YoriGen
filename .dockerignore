@@ -1,0 +1,20 @@
+# Keep the build context small and reproducible: the image installs its own
+# dependencies and builds from source.
+#
+# `tests/` is deliberately NOT excluded: `tsconfig.json` includes all of `src`,
+# and `src/guison.test.ts` imports `../tests/fixtures/guison`, so `tsc --noEmit`
+# inside `npm run build` needs that fixture present.
+.git
+.gitignore
+.github
+node_modules
+dist
+coverage
+playwright-report
+test-results
+Dockerfile
+.dockerignore
+README.md
+LICENSE
+railway.json
+render.yaml
