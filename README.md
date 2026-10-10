@@ -76,11 +76,36 @@ npm install
 npm run dev         # Starts Vite dev server on 0.0.0.0:5173
 npm run build       # Strict TypeScript check and production build (outputs dist/)
 npm start           # Serves the built dist/ on 0.0.0.0:$PORT (default 8080)
-npm test            # 387 Vitest unit tests + static-server integration tests
+npm test            # Vitest unit tests (web and Android UI) + static-server integration tests
 npm run test:coverage  # Same suite with a V8 report in coverage/, enforcing thresholds
-npm run test:e2e    # Playwright browser tests across viewports (generator, BIN lookup, Card Sorter)
+npm run test:e2e    # Playwright browser tests across viewports, including the Android UI
 npm run lint        # ESLint check
 ```
+
+## Android App
+
+ORIGEN ships as an installable Android app built with
+[Capacitor](https://capacitorjs.com/). It has its own mobile-first interface
+(bottom navigation, Android Back handling, edge-to-edge layout) and bundles
+every asset into the APK, so Generator, Card Sorter and Settings work fully
+offline. BIN Lookup is the only feature that uses the network, and it sends only
+a 6–8 digit prefix to the Guison API. The APK requests only network permissions.
+
+Requires Node 22+, JDK 21 and the Android SDK (platform 36).
+
+```bash
+npm run dev:mobile          # mobile UI in a browser at http://localhost:5174 (Escape = Back)
+npm run android:sync        # build the mobile bundle and copy it into android/
+npm run android:apk:debug   # → android/app/build/outputs/apk/debug/app-debug.apk
+adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+The **Android** GitHub Actions workflow builds the debug APK on every pull
+request and uploads it as the `origen-debug-apk` artifact.
+
+- [docs/ANDROID.md](docs/ANDROID.md): prerequisites, builds, installing,
+  release signing, permissions, external services and limitations.
+- [docs/ADDING_A_TOOL.md](docs/ADDING_A_TOOL.md): adding a new tool to the app.
 
 ## Continuous Integration
 
@@ -90,12 +115,18 @@ on demand:
 | Job | Node | Runs |
 | --- | --- | --- |
 | `quality` | 20 and 22 | `npm run lint`, `tsc --noEmit`, `npm run test:coverage` (uploads the coverage report) |
-| `build` | 22 | `npm run build`, `npm run test:server`, uploads `dist/` |
+| `build` | 22 | `npm run build`, `npm run test:server`, `npm run build:mobile`, uploads `dist/` |
 | `docker` | 22 | `docker build`, then boots the container and hits `/healthz` |
-| `e2e` | 22 | `playwright test` on the `desktop` and `mobile` projects |
+| `e2e` | 22 | `playwright test` on the `desktop`, `mobile` and `android` projects |
 
 `build` and `e2e` wait for `quality`, so a lint or type failure short-circuits the
 expensive jobs. Superseded runs on the same branch are cancelled automatically.
+
+`.github/workflows/android.yml` builds the Android debug APK with JDK 21 and the
+Android SDK, fails if the APK requests any permission beyond network access, and
+uploads the APK. Run it manually with **release** checked to also build a
+release APK, signed when the signing secrets described in
+[docs/ANDROID.md](docs/ANDROID.md#release-signing) are configured.
 
 ## Deployment
 
