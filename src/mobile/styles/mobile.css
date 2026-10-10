@@ -1,5 +1,64 @@
-/* ORIGEN mobile — charcoal & mint, matching the web product's tokens. */
+/* ORIGEN mobile — charcoal & mint, matching the web product's tokens.
+ *
+ * Typography is tokenised below (`--font-*`, `--size-*`, `--weight-*`,
+ * `--leading-*`, `--tracking-*`). Use the tokens rather than literals so the
+ * scale stays consistent across tools. Two rules apply everywhere:
+ *
+ *   1. Content is authored in sentence case. Uppercase is presentation only
+ *      and lives in CSS (`.brand-name`, `.badge`, `.eyebrow`), so screen
+ *      readers, search and copy/paste all see the real text.
+ *   2. Nothing derived from a person or a service is ever re-cased — user
+ *      input, generated fixtures, BIN metadata, hostnames and URLs keep the
+ *      casing they arrive with.
+ *
+ * See docs/BRANDING.md for the full scale and the reasoning behind it.
+ */
 :root {
+  /* Type — family. Roboto is Android's system face, so it is always present
+     and always offline; no font file is bundled and no font request is made.
+     Inter leads on the web product, which is why it stays as a fallback. */
+  --font-ui: Roboto, Inter, -apple-system, "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", "Roboto Mono", "Droid Sans Mono", Consolas, monospace;
+
+  /* Type — size scale. One step per role that appears in the app. Named
+     --size-* so it never collides with --text, the ink colour. */
+  --size-micro: 10px; /* fixture tag */
+  --size-label: 11px; /* wordmark, badges, eyebrows */
+  --size-caption: 12px; /* nav labels, code, stat labels, status pills */
+  --size-note: 13px; /* hints, metadata, footnotes */
+  --size-body: 14px; /* body copy, fields, notices */
+  --size-control: 15px; /* buttons, segments, switches */
+  --size-title: 16px; /* inputs, card titles, state titles */
+  --size-value: 18px; /* numeric results */
+  --size-heading: 19px; /* app bar and sheet headings */
+  --size-input-lg: 20px; /* the large BIN input */
+  --size-display: 22px; /* fatal-error heading */
+
+  /* Type — weight. 550 and 650 are deliberate intermediate steps: Android's
+     Roboto resolves them to Medium and Bold, and pinning the numbers keeps
+     the type identical on every device instead of drifting with the CSS
+     weight-matching rules. */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-emphasis: 550;
+  --weight-label: 600;
+  --weight-title: 650;
+  --weight-logotype: 700;
+
+  /* Type — line height. */
+  --leading-tight: 1.25; /* single-line headings */
+  --leading-snug: 1.45; /* default UI text */
+  --leading-normal: 1.55; /* code blocks */
+  --leading-relaxed: 1.6; /* long-form generated output */
+
+  /* Type — letter spacing. */
+  --tracking-tight: -0.01em; /* headings */
+  --tracking-normal: 0.01em; /* nav labels, monospaced data */
+  --tracking-wide: 0.06em; /* badges, the large BIN input */
+  --tracking-micro: 0.08em; /* micro-labels set in monospace */
+  --tracking-label: 0.14em; /* eyebrows */
+  --tracking-logotype: 0.16em; /* the ORIGEN wordmark */
+
   --bg: #101210;
   --surface: #181b18;
   --surface-2: #1e221d;
@@ -19,7 +78,6 @@
   --danger-soft: rgba(255, 155, 143, 0.12);
   --danger-ink: #2b0b07;
   --focus: #a3cb60;
-  --mono: ui-monospace, "SFMono-Regular", "Roboto Mono", "Droid Sans Mono", Consolas, monospace;
   --radius: 14px;
   --radius-sm: 10px;
   --tap: 48px;
@@ -28,9 +86,9 @@
   --sal: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
   --sar: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
   --ease: cubic-bezier(0.2, 0, 0, 1);
-  font-family: Roboto, Inter, -apple-system, "Segoe UI", system-ui, sans-serif;
-  font-size: 16px;
-  line-height: 1.45;
+  font-family: var(--font-ui);
+  font-size: var(--size-title);
+  line-height: var(--leading-snug);
   color: var(--text);
   background: var(--bg);
   color-scheme: dark;
@@ -197,15 +255,17 @@ svg {
   flex: 1;
 }
 .brand-name {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
+  font-size: var(--size-label);
+  font-weight: var(--weight-logotype);
+  letter-spacing: var(--tracking-logotype);
   color: var(--faint);
+  text-transform: uppercase;
 }
 .app-title {
-  font-size: 19px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  font-size: var(--size-heading);
+  font-weight: var(--weight-title);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -220,8 +280,8 @@ svg {
   border: 1px solid var(--warn);
   background: var(--warn-soft);
   color: var(--warn);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--size-caption);
+  font-weight: var(--weight-label);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -322,9 +382,9 @@ svg {
 }
 .nav-label {
   max-width: 100%;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
+  font-size: var(--size-caption);
+  font-weight: var(--weight-label);
+  letter-spacing: var(--tracking-normal);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -371,8 +431,9 @@ svg {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  font-size: 16px;
-  font-weight: 650;
+  font-size: var(--size-title);
+  font-weight: var(--weight-title);
+  line-height: var(--leading-tight);
 }
 .card-title svg {
   color: var(--accent);
@@ -385,15 +446,19 @@ svg {
   justify-content: flex-end;
   margin-top: -4px;
 }
+/* Badges are the one place ORIGEN sets type in caps: two-or-three-word status
+   micro-labels, authored in sentence case and uppercased here. Never put a
+   person's text, a fixture or a service name in a badge. */
 .badge {
   flex-shrink: 0;
   padding: 3px 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-size: var(--size-label);
+  font-weight: var(--weight-label);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
   white-space: nowrap;
 }
 .badge-good {
@@ -415,7 +480,7 @@ svg {
   border-radius: var(--radius-sm);
   background: var(--surface-2);
   color: var(--muted);
-  font-size: 14px;
+  font-size: var(--size-body);
 }
 .notice svg {
   margin-top: 1px;
@@ -429,8 +494,8 @@ svg {
   background: var(--accent-soft);
   color: var(--text);
   font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.02em;
+  font-size: var(--size-caption);
+  letter-spacing: var(--tracking-normal);
 }
 .notice-warning {
   border-color: var(--warn);
@@ -443,14 +508,15 @@ svg {
 .footnote {
   margin-top: 18px;
   color: var(--faint);
-  font-size: 13px;
+  font-size: var(--size-note);
   text-align: center;
 }
 .eyebrow {
   color: var(--faint);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
+  font-size: var(--size-label);
+  font-weight: var(--weight-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
 }
 .status-row {
   display: flex;
@@ -471,8 +537,8 @@ svg {
   min-width: 0;
 }
 .field-label {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--size-body);
+  font-weight: var(--weight-label);
 }
 .field-row {
   display: flex;
@@ -491,7 +557,7 @@ svg {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--input);
-  font-size: 16px;
+  font-size: var(--size-title);
   appearance: none;
 }
 .control:focus {
@@ -508,8 +574,8 @@ svg {
 }
 .control-lg {
   min-height: 56px;
-  font-size: 20px;
-  letter-spacing: 0.06em;
+  font-size: var(--size-input-lg);
+  letter-spacing: var(--tracking-wide);
 }
 select.control {
   padding-right: 40px;
@@ -522,20 +588,20 @@ select.control {
 .textarea {
   min-height: 180px;
   resize: vertical;
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: var(--size-body);
+  line-height: var(--leading-relaxed);
   white-space: pre;
   overflow: auto;
 }
 .hint {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--size-note);
 }
 .field-error,
 .action-error {
   color: var(--danger);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--size-note);
+  font-weight: var(--weight-medium);
 }
 .grid-2 {
   display: grid;
@@ -601,7 +667,7 @@ select.control {
   outline-offset: 2px;
 }
 .switch-label {
-  font-size: 15px;
+  font-size: var(--size-control);
 }
 
 /* Segmented control */
@@ -622,8 +688,8 @@ select.control {
   border-radius: 9px;
   background: none;
   color: var(--muted);
-  font-size: 15px;
-  font-weight: 600;
+  font-size: var(--size-control);
+  font-weight: var(--weight-label);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -650,7 +716,7 @@ select.control {
   border: 1px solid var(--accent-line);
   border-radius: 999px;
   background: var(--accent-soft);
-  font-size: 13px;
+  font-size: var(--size-note);
   overflow-wrap: anywhere;
 }
 .chip svg {
@@ -674,8 +740,8 @@ select.control {
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface-2);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--size-body);
+  font-weight: var(--weight-label);
   cursor: pointer;
 }
 .chip-btn[aria-pressed="true"] {
@@ -702,8 +768,8 @@ select.control {
   padding: 10px 18px;
   border: 1px solid transparent;
   border-radius: 999px;
-  font-size: 15px;
-  font-weight: 650;
+  font-size: var(--size-control);
+  font-weight: var(--weight-title);
   cursor: pointer;
   transition: filter 120ms, background-color 120ms;
 }
@@ -740,7 +806,7 @@ select.control {
 .btn-block {
   width: 100%;
   min-height: 52px;
-  font-size: 16px;
+  font-size: var(--size-title);
 }
 .btn-row {
   display: flex;
@@ -790,7 +856,7 @@ select.control {
 }
 .action-summary {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--size-note);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -809,7 +875,7 @@ select.control {
 }
 .results-meta {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--size-note);
 }
 .fixture-list {
   display: flex;
@@ -841,8 +907,8 @@ select.control {
   min-width: 0;
 }
 .fixture-number {
-  font-size: 16px;
-  letter-spacing: 0.03em;
+  font-size: var(--size-title);
+  letter-spacing: var(--tracking-normal);
   overflow-wrap: anywhere;
 }
 .fixture-meta {
@@ -850,14 +916,14 @@ select.control {
   align-items: center;
   gap: 6px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--size-note);
   overflow-wrap: anywhere;
 }
 .fixture-tag {
   color: var(--faint);
   font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
+  font-size: var(--size-micro);
+  letter-spacing: var(--tracking-micro);
 }
 .fixture .icon-btn {
   border-color: transparent;
@@ -920,13 +986,14 @@ select.control {
   color: var(--danger);
 }
 .state-title {
-  font-size: 16px;
-  font-weight: 650;
+  font-size: var(--size-title);
+  font-weight: var(--weight-title);
+  line-height: var(--leading-tight);
 }
 .state-body {
   max-width: 34ch;
   color: var(--muted);
-  font-size: 14px;
+  font-size: var(--size-body);
 }
 .state .btn {
   margin-top: 8px;
@@ -967,7 +1034,7 @@ select.control {
   gap: 16px;
   padding: 10px 0;
   border-bottom: 1px solid var(--line);
-  font-size: 14px;
+  font-size: var(--size-body);
 }
 .meta-row:last-child {
   border-bottom: 0;
@@ -979,20 +1046,20 @@ select.control {
 .meta-row dd {
   min-width: 0;
   text-align: right;
-  font-weight: 550;
+  font-weight: var(--weight-emphasis);
   overflow-wrap: anywhere;
 }
 .meta-row dd.unknown {
   color: var(--faint);
-  font-weight: 400;
+  font-weight: var(--weight-regular);
 }
 .details summary {
   min-height: var(--tap);
   display: flex;
   align-items: center;
   color: var(--muted);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--size-body);
+  font-weight: var(--weight-label);
   cursor: pointer;
 }
 .code {
@@ -1004,8 +1071,8 @@ select.control {
   border-radius: var(--radius-sm);
   background: var(--input);
   font-family: var(--mono);
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: var(--size-caption);
+  line-height: var(--leading-normal);
   white-space: pre;
 }
 
@@ -1050,7 +1117,7 @@ select.control {
 .history-item > span:last-of-type {
   flex: 1;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--size-note);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1073,12 +1140,12 @@ select.control {
 }
 .stat dt {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--size-caption);
 }
 .stat dd {
   font-family: var(--mono);
-  font-size: 18px;
-  font-weight: 600;
+  font-size: var(--size-value);
+  font-weight: var(--weight-label);
   font-variant-numeric: tabular-nums;
 }
 .sort-row > .control {
@@ -1102,7 +1169,7 @@ select.control {
   padding: 4px 0;
   border-bottom: 1px solid var(--line);
   text-decoration: none;
-  font-weight: 550;
+  font-weight: var(--weight-emphasis);
 }
 .list-link:last-child {
   border-bottom: 0;
@@ -1117,7 +1184,7 @@ select.control {
   gap: 10px;
   padding-left: 20px;
   color: var(--muted);
-  font-size: 14px;
+  font-size: var(--size-body);
 }
 .plain-list strong,
 .guide strong {
@@ -1156,7 +1223,7 @@ select.control {
 }
 .option-text > :last-child {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--size-note);
 }
 
 /* ---------- Toast ---------- */
@@ -1172,8 +1239,8 @@ select.control {
   border-radius: 12px;
   background: var(--text);
   color: var(--bg);
-  font-size: 14px;
-  font-weight: 550;
+  font-size: var(--size-body);
+  font-weight: var(--weight-emphasis);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   pointer-events: none;
   display: flex;
@@ -1246,12 +1313,13 @@ select.control {
   background: transparent;
 }
 .sheet-title {
-  font-size: 19px;
-  font-weight: 650;
+  font-size: var(--size-heading);
+  font-weight: var(--weight-title);
+  line-height: var(--leading-tight);
 }
 .sheet-description {
   color: var(--muted);
-  font-size: 15px;
+  font-size: var(--size-control);
 }
 .sheet-body {
   display: flex;
@@ -1280,7 +1348,8 @@ select.control {
   background: var(--bg);
 }
 .fatal h1 {
-  font-size: 22px;
+  font-size: var(--size-display);
+  line-height: var(--leading-tight);
 }
 .fatal p {
   color: var(--muted);
@@ -1316,18 +1385,18 @@ select.control {
     width: 52px;
   }
   .nav-label {
-    font-size: 11px;
+    font-size: var(--size-label);
     letter-spacing: 0;
   }
   .segment {
     padding: 6px 4px;
-    font-size: 14px;
+    font-size: var(--size-body);
   }
   .action-bar-row > .btn {
     gap: 6px;
     padding-left: 10px;
     padding-right: 10px;
-    font-size: 14px;
+    font-size: var(--size-body);
   }
 }
 

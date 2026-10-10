@@ -172,7 +172,10 @@ describe("BIN Lookup tool", () => {
     expect(service.lookup).toHaveBeenCalledWith("457173", expect.any(AbortSignal));
     const result = $("#lookup-result");
     expect(result.textContent).toContain("Example Bank");
-    expect(result.textContent).toContain("EXAMPLE BIN API");
+    // The service label keeps the casing it is configured with: caps in the UI
+    // come from CSS, never from the source string or from .toUpperCase().
+    expect(result.textContent).toContain("Example BIN API");
+    expect(result.textContent).not.toContain("EXAMPLE BIN API");
     expect(result.textContent).toContain("not card verification");
     expect(toastText()).toContain("No card or account was verified");
 
@@ -195,7 +198,7 @@ describe("BIN Lookup tool", () => {
     const items = document.querySelectorAll<HTMLButtonElement>("#lookup-history .history-item");
     expect(items).toHaveLength(2);
     [...items].find((item) => item.textContent?.includes("457173"))?.click();
-    expect($("#lookup-result").textContent).toContain("SESSION SNAPSHOT");
+    expect($("#lookup-result").textContent).toContain("Session snapshot");
     expect($<HTMLInputElement>("#lookup-bin").value).toBe("457173");
     expect(service.lookup).toHaveBeenCalledTimes(2);
 
@@ -305,7 +308,7 @@ describe("Card Sorter tool", () => {
     bootShell({ hash: "#/sorter" });
     await paste(`${RECORDS}\nnot a record`);
     expect($("#sorter-stat-input").textContent).toBe("5");
-    expect($("#sorter-line-badge").textContent).toMatch(/5 LINES/);
+    expect($("#sorter-line-badge").textContent).toBe("5 lines");
     click("#sorter-quick-clean");
     await flush();
     expect($("#sorter-result-view").hidden).toBe(false);
@@ -463,26 +466,26 @@ describe("Settings tool", () => {
   it("lists which tools work offline", () => {
     bootShell({ hash: "#/settings" });
     const text = $('[data-tool="settings"]').textContent ?? "";
-    expect(text).toContain("WORKS OFFLINE");
-    expect(text).toContain("NEEDS INTERNET");
+    expect(text).toContain("Works offline");
+    expect(text).toContain("Needs internet");
   });
 
   it("checks service status only on request", async () => {
     const checkStatus = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new BinServiceError("offline", "You're offline.")).mockRejectedValueOnce(new Error("Guison is not ready."));
     bootShell({ hash: "#/settings", binService: stubService({ checkStatus }) });
     expect(checkStatus).not.toHaveBeenCalled();
-    expect($("#settings-api-state").textContent).toBe("NOT CHECKED");
+    expect($("#settings-api-state").textContent).toBe("Not checked");
     click("#settings-check-api");
     click("#settings-check-api");
     await flush();
     expect(checkStatus).toHaveBeenCalledTimes(1);
-    expect($("#settings-api-state").textContent).toBe("READY");
+    expect($("#settings-api-state").textContent).toBe("Ready");
     click("#settings-check-api");
     await flush();
-    expect($("#settings-api-state").textContent).toBe("OFFLINE");
+    expect($("#settings-api-state").textContent).toBe("Offline");
     click("#settings-check-api");
     await flush();
-    expect($("#settings-api-state").textContent).toBe("UNAVAILABLE");
+    expect($("#settings-api-state").textContent).toBe("Unavailable");
     expect($("#settings-api-status").textContent).toBe("Guison is not ready.");
   });
 

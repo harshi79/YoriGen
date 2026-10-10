@@ -239,15 +239,15 @@ function createGeneratorScreen(context: ToolContext): ToolScreen {
     { class: "view", id: "gen-builder" },
     h("div", { class: "notice" }, icon(ShieldCheck), h("span", {}, "Test data only — synthetic fixtures, never real payment cards.")),
     card(
-      { title: "BIN / IIN", badge: "STEP 1", iconNode: Wand2 },
+      { title: "BIN / IIN", badge: "Step 1", iconNode: Wand2 },
       prefixField.element,
       autoSwitch.element,
       detected,
       networkField.element,
     ),
-    card({ title: "Expiry", badge: "STEP 2" }, expirySegments.element, expiryHint, expiryFields, expiryError),
-    card({ title: "CVV", badge: "STEP 3" }, cvvSegments.element, cvvHint, cvvField.element),
-    card({ title: "Quantity", badge: "STEP 4" }, h("div", { class: "chips", role: "group", "aria-label": "Quantity presets" }, ...presetButtons), quantityField.element),
+    card({ title: "Expiry", badge: "Step 2" }, expirySegments.element, expiryHint, expiryFields, expiryError),
+    card({ title: "CVV", badge: "Step 3" }, cvvSegments.element, cvvHint, cvvField.element),
+    card({ title: "Quantity", badge: "Step 4" }, h("div", { class: "chips", role: "group", "aria-label": "Quantity presets" }, ...presetButtons), quantityField.element),
     h("p", { class: "footnote" }, "Generated locally with Luhn check digits. No network calls, no verification, no accounts."),
   );
 
@@ -414,7 +414,7 @@ function createGeneratorScreen(context: ToolContext): ToolScreen {
         resultsBody,
         emptyState({
           iconNode: Layers,
-          eyebrow: "A CLEAN SLATE",
+          eyebrow: "A clean slate",
           title: "No fixtures yet",
           body: "Configure the builder and tap Generate. Fixtures are created on this device.",
           action: button({ label: "Open builder", iconNode: Wand2, variant: "primary", onClick: () => showView("builder") }),

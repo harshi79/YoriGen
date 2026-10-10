@@ -53,7 +53,7 @@ function createSorterScreen(context: ToolContext): ToolScreen {
     "aria-hidden": "true",
   });
   const inputError = h("p", { class: "field-error", id: "sorter-error", role: "alert", hidden: true });
-  const lineBadge = h("span", { class: "badge", id: "sorter-line-badge" }, "LOCAL ONLY");
+  const lineBadge = h("span", { class: "badge", id: "sorter-line-badge" }, "Local only");
 
   const statValue = (id: string) => h("strong", { id }, "0");
   const stats = {
@@ -202,7 +202,7 @@ function createSorterScreen(context: ToolContext): ToolScreen {
     mix.textContent = session.hasInput
       ? `${plural(current.recognized, "record")} recognized · ${current.unrecognized} unrecognized kept`
       : "Statistics appear as soon as you paste.";
-    lineBadge.textContent = session.hasInput ? `${current.inputLines} LINES` : "LOCAL ONLY";
+    lineBadge.textContent = session.hasInput ? `${plural(current.inputLines, "line")}` : "Local only";
     resultTab.textContent = session.hasInput ? `Result · ${current.remainingLines}` : "Result";
     status.textContent = session.status;
     beforeAfter.textContent = `Before ${current.inputLines} → after ${current.remainingLines} lines`;
@@ -228,7 +228,7 @@ function createSorterScreen(context: ToolContext): ToolScreen {
         ),
       );
     } else {
-      replace(resultBody, card({ title: "Result", badge: `${current.remainingLines} LINES` }, status, beforeAfter, output));
+      replace(resultBody, card({ title: "Result", badge: plural(current.remainingLines, "line") }, status, beforeAfter, output));
     }
     const hasEntries = session.entries.length > 0;
     for (const control of root.querySelectorAll<HTMLButtonElement>("[data-action], #sorter-clean-all, #sorter-quick-clean")) control.disabled = busy || !hasEntries;
