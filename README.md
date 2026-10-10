@@ -60,6 +60,7 @@ Community & updates: [Join Channel on Telegram](https://t.me/+y8EekRvqpnQzNjZl)
 
 - Renamed end to end to **ORIGEN** (page title, wordmark, navigation, Open Graph metadata, README).
 - The header carries a **Join Channel** button that opens the ORIGEN Telegram channel in a new tab. It is keyboard reachable, has an explicit accessible label, and collapses to a compact icon button on very narrow screens.
+- Charcoal and mint throughout, one type scale, one mark. [docs/BRANDING.md](docs/BRANDING.md) records the palette, the typography tokens, the casing rules and the source of truth for every brand asset, including the Android icon and splash screen.
 
 ## Strict Boundaries & Safety
 

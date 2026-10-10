@@ -67,7 +67,7 @@ function createLookupScreen(context: ToolContext): ToolScreen {
 
   const resultHost = h("div", { class: "lookup-result", id: "lookup-result", "aria-live": "polite" });
   const historyList = h("div", { class: "history-list", id: "lookup-history" });
-  const historyCard = card({ title: "Recent lookups", badge: "THIS SESSION", iconNode: History }, historyList);
+  const historyCard = card({ title: "Recent lookups", badge: "This session", iconNode: History }, historyList);
 
   const scroller = h(
     "div",
@@ -76,7 +76,7 @@ function createLookupScreen(context: ToolContext): ToolScreen {
       "div",
       { class: "status-row" },
       networkChip,
-      h("span", { class: "badge" }, "NEEDS INTERNET"),
+      h("span", { class: "badge" }, "Needs internet"),
     ),
     offlineBanner,
     card({ title: "Look up a prefix", iconNode: Fingerprint }, form),
@@ -110,7 +110,7 @@ function createLookupScreen(context: ToolContext): ToolScreen {
           resultHost,
           emptyState({
             iconNode: Fingerprint,
-            eyebrow: "JUST THE FIRST FEW DIGITS",
+            eyebrow: "Just the first few digits",
             title: "Know the range, not the account",
             body: "Enter a 6–8 digit prefix to see network, issuer and country metadata. Nothing is sent until you tap Look up.",
           }),
@@ -152,8 +152,8 @@ function createLookupScreen(context: ToolContext): ToolScreen {
         replace(
           resultHost,
           card(
-            { title: `BIN ${data.bin}`, badge: cached ? "SESSION SNAPSHOT" : binService.label.toUpperCase(), className: "result-card" },
-            h("p", { class: "hint" }, cached ? "Saved in this session; not refreshed." : "Metadata returned · not card verification."),
+            { title: `BIN ${data.bin}`, badge: cached ? "Session snapshot" : "Live", className: "result-card" },
+            h("p", { class: "hint" }, cached ? "Saved in this session; not refreshed." : `Returned by ${binService.label} · not card verification.`),
             rows,
             h("details", { class: "details" }, h("summary", {}, "Full response (JSON)"), json),
             h(

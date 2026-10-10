@@ -59,11 +59,11 @@ function createSettingsScreen(context: ToolContext): ToolScreen {
     "dl",
     { class: "meta-list" },
     ...context.tools().map((tool) =>
-      row(tool.title, h("span", { class: tool.network === "none" ? "badge badge-good" : "badge badge-warn" }, tool.network === "none" ? "WORKS OFFLINE" : "NEEDS INTERNET")),
+      row(tool.title, h("span", { class: tool.network === "none" ? "badge badge-good" : "badge badge-warn" }, tool.network === "none" ? "Works offline" : "Needs internet")),
     ),
   );
 
-  const statusBadge = h("span", { class: "badge", id: "settings-api-state" }, "NOT CHECKED");
+  const statusBadge = h("span", { class: "badge", id: "settings-api-state" }, "Not checked");
   const statusText = h("p", { class: "hint", id: "settings-api-status", "aria-live": "polite" }, "Status is checked only when you ask. No BIN is sent.");
   let checking: AbortController | null = null;
   const checkButton = button({
@@ -74,16 +74,16 @@ function createSettingsScreen(context: ToolContext): ToolScreen {
       if (checking) return;
       checking = new AbortController();
       checkButton.disabled = true;
-      statusBadge.textContent = "CHECKING";
+      statusBadge.textContent = "Checking";
       statusBadge.className = "badge";
       statusText.textContent = "Checking dataset readiness…";
       try {
         await binService.checkStatus(checking.signal);
-        statusBadge.textContent = "READY";
+        statusBadge.textContent = "Ready";
         statusBadge.className = "badge badge-good";
         statusText.textContent = "The service answered ready just now. It is not monitored continuously.";
       } catch (error) {
-        statusBadge.textContent = error instanceof BinServiceError && error.code === "offline" ? "OFFLINE" : "UNAVAILABLE";
+        statusBadge.textContent = error instanceof BinServiceError && error.code === "offline" ? "Offline" : "Unavailable";
         statusBadge.className = "badge badge-warn";
         statusText.textContent = (error as Error).message;
       } finally {
