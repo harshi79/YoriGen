@@ -21,6 +21,7 @@ connection at all.
 - [Versioning](#versioning)
 - [External services and network use](#external-services-and-network-use)
 - [Permissions and privacy](#permissions-and-privacy)
+- [Brand assets](#brand-assets)
 - [Mobile behaviour](#mobile-behaviour)
 - [Project layout](#project-layout)
 - [Testing](#testing)
@@ -227,6 +228,25 @@ them. The Android CI workflow fails if the built APK requests any other permissi
 - Cleartext HTTP is disabled, mixed content is blocked, and the bundled page
   runs under a strict Content Security Policy (`default-src 'none'`, scripts and
   styles from the bundle only, `connect-src` limited to the BIN API origin).
+
+## Brand assets
+
+The launcher icon, the splash screen, the application label and the palette are
+brand assets with a documented source of truth. See
+[BRANDING.md](./BRANDING.md) for the full identity, and run `npm test` after
+changing any of them: `src/mobile/brand.test.ts` fails if the palette in
+`mobile.css`, `android/.../values/colors.xml`, the app name, the mark geometry
+or the contrast ratios drift apart.
+
+| Asset | Where it lives |
+| --- | --- |
+| Application label | `android/app/src/main/res/values/strings.xml` (`app_name`) |
+| Adaptive icon | `android/.../mipmap-anydpi-v26/ic_launcher.xml` + `drawable/ic_launcher_foreground.xml` |
+| Themed icon (Android 13+) | `android/.../drawable/ic_launcher_monochrome.xml` |
+| Legacy icon (API 24–25) | `android/.../mipmap-*dpi/ic_launcher*.png` |
+| Splash screen | `android/.../values/styles.xml` `AppTheme.NoActionBarLaunch` + `drawable/ic_splash_brand.xml` |
+| Launch colours | `android/.../values/colors.xml`, `values/ic_launcher_background.xml` |
+| Bundled UI | `src/mobile/styles/mobile.css` |
 
 ## Mobile behaviour
 
