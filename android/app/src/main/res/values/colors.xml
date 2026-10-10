@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="origen_background">#101210</color>
+    <color name="origen_surface">#181B18</color>
+    <color name="origen_accent">#D1F58A</color>
+    <color name="origen_accent_ink">#253119</color>
+    <color name="colorPrimary">#101210</color>
+    <color name="colorPrimaryDark">#101210</color>
+    <color name="colorAccent">#D1F58A</color>
+</resources>

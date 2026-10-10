@@ -1,0 +1,112 @@
+import groovy.json.JsonSlurper
+
+apply plugin: 'com.android.application'
+
+// ---------------------------------------------------------------------------
+// Versioning: versionName comes from the root package.json so the web app,
+// the About screen and the APK always agree. versionCode is derived from it
+// (major * 10000 + minor * 100 + patch). Both can be overridden for CI builds:
+//   ./gradlew assembleRelease -PversionName=1.2.0 -PversionCode=10200
+// ---------------------------------------------------------------------------
+def packageJson = new JsonSlurper().parse(rootProject.file('../package.json'))
+def appVersionName = (project.findProperty('versionName') ?: packageJson.version).toString()
+
+def deriveVersionCode = { String name ->
+    def match = (name =~ /^(\d+)\.(\d+)\.(\d+)/)
+    if (!match.find()) {
+        throw new GradleException("Version '${name}' must start with MAJOR.MINOR.PATCH")
+    }
+    def major = match.group(1).toInteger()
+    def minor = match.group(2).toInteger()
+    def patch = match.group(3).toInteger()
+    if (minor > 99 || patch > 99) {
+        throw new GradleException("Minor and patch must be 0-99 to derive versionCode; pass -PversionCode instead")
+    }
+    return major * 10000 + minor * 100 + patch
+}
+def appVersionCode = project.hasProperty('versionCode') ?
+        project.property('versionCode').toString().toInteger() :
+        deriveVersionCode(appVersionName)
+
+// ---------------------------------------------------------------------------
+// Release signing. Credentials are never committed. They are read from
+// android/keystore.properties (git-ignored; see keystore.properties.example)
+// or from environment variables in CI. Without them, assembleRelease produces
+// an unsigned APK that must be signed before distribution.
+// ---------------------------------------------------------------------------
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+def signingValue = { String key, String envName ->
+    def value = keystoreProperties.getProperty(key) ?: System.getenv(envName)
+    return value ? value.toString() : null
+}
+def releaseStorePath = signingValue('storeFile', 'ORIGEN_KEYSTORE_PATH')
+def releaseStorePassword = signingValue('storePassword', 'ORIGEN_KEYSTORE_PASSWORD')
+def releaseKeyAlias = signingValue('keyAlias', 'ORIGEN_KEY_ALIAS')
+def releaseKeyPassword = signingValue('keyPassword', 'ORIGEN_KEY_PASSWORD')
+def hasReleaseSigning = releaseStorePath && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+
+android {
+    namespace = "io.github.harshi79.origen"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "io.github.harshi79.origen"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode appVersionCode
+        versionName appVersionName
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile rootProject.file(releaseStorePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
