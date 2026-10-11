@@ -306,15 +306,34 @@ svg {
   inset: 0;
   display: flex;
   flex-direction: column;
-  animation: screen-in 160ms var(--ease);
+  /* Opaque, so a screen never blends with the one it replaces. Screens are
+     never faded in on a swipe: the interactive stack moves them instead. */
+  background: var(--bg);
 }
-@keyframes screen-in {
-  from {
-    opacity: 0.4;
-  }
-  to {
-    opacity: 1;
-  }
+/* Interactive stacked cards (see ui/stack-transition.ts). The card under the
+   finger sits above the destination it reveals. The underlying page is scaled
+   down and dimmed by --stack-dim, which the controller updates per frame. */
+.screen-host.stack-top {
+  z-index: 2;
+}
+.screen-host.stack-under {
+  z-index: 1;
+}
+.screen-host.stack-under::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: var(--stack-dim, 0);
+  pointer-events: none;
+}
+.screen-host.stack-moving {
+  will-change: transform;
+  overflow: hidden;
+  border-radius: 20px;
+}
+.screen-host.stack-top.stack-moving {
+  box-shadow: 0 0 32px rgba(0, 0, 0, 0.38);
 }
 /* Directional reveal for a swipe or a bottom-navigation change. Short and
    restrained: a small offset plus a fade, never a full-screen slide. The
@@ -1473,27 +1492,11 @@ select.control {
 .community-dialog .sheet-body {
   gap: 0;
 }
-.community-emblem {
-  display: grid;
-  place-items: center;
-  width: 52px;
-  height: 52px;
-  margin-top: 22px;
-  border: 1px solid var(--accent-line);
-  border-radius: 16px;
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-:root[data-theme="light"] .community-emblem {
-  color: var(--focus);
-}
-.community-emblem svg {
-  width: 26px;
-  height: 26px;
-}
 .community-invites {
   display: grid;
   gap: 10px;
+  /* Space the invites from the description, where the removed emblem sat. */
+  margin-top: 22px;
 }
 .community-invite {
   display: flex;

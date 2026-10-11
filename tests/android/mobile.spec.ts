@@ -420,6 +420,85 @@ test.describe("swipe between destinations", () => {
   });
 });
 
+test.describe("interactive stacked-card swipe", () => {
+  /** Opens a raw touch stream so a test can pause mid-gesture. */
+  async function openTouch(page: Page) {
+    const cdp = await page.context().newCDPSession(page);
+    const from = await swipePoint(page, -260);
+    const move = (x: number, y: number) => cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y }] });
+    return {
+      from,
+      start: () => cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: from.x, y: from.y }] }),
+      move,
+      end: async (dx: number) => {
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await cdp.detach();
+        return dx;
+      },
+    };
+  }
+
+  test("the card follows the finger and the next page is staged underneath before release", async ({ page }) => {
+    const touch = await openTouch(page);
+    await touch.start();
+    for (let step = 1; step <= 8; step += 1) await touch.move(touch.from.x - (step * 240) / 8, touch.from.y);
+
+    // Still held down: the navigation has not happened, but the card has moved
+    // with the finger and the next page is already revealed behind it. The
+    // frames are painted asynchronously, so poll rather than read once.
+    await expect(page.locator("#app-title")).toHaveText("Generator");
+    const card = page.locator(".screen-host.stack-top");
+    await expect(card).toHaveAttribute("data-screen", "generator");
+    await expect
+      .poll(() => card.evaluate((element) => new DOMMatrixReadOnly(getComputedStyle(element).transform).m41))
+      .toBeLessThan(-100);
+    const under = screen(page, "lookup");
+    await expect(under).toHaveClass(/stack-under/);
+    await expect(under).not.toHaveAttribute("hidden");
+
+    await touch.end(-200);
+    await expect(page.locator("#app-title")).toHaveText("BIN Lookup");
+    await expect(card).toHaveCount(0);
+    await expect(under).not.toHaveClass(/stack-under/);
+    await expect(under).not.toHaveAttribute("style", /transform/);
+  });
+
+  test("no screen fades or blanks at any frame of a committed swipe", async ({ page }) => {
+    // Sample every screen's opacity and visibility on every animation frame.
+    await page.evaluate(() => {
+      const samples: { screen: string; opacity: string; hidden: boolean }[] = [];
+      (window as unknown as { __samples: typeof samples }).__samples = samples;
+      const tick = () => {
+        for (const element of document.querySelectorAll<HTMLElement>(".screen-host")) {
+          if (element.hidden) continue;
+          samples.push({ screen: element.dataset.screen ?? "", opacity: getComputedStyle(element).opacity, hidden: element.hidden });
+        }
+        requestAnimationFrame(tick);
+      };
+      tick();
+    });
+    await swipe(page, -260);
+    await expect(page.locator("#app-title")).toHaveText("BIN Lookup");
+    await page.waitForTimeout(100);
+    const samples = await page.evaluate(() => (window as unknown as { __samples: { screen: string; opacity: string }[] }).__samples);
+    expect(samples.length).toBeGreaterThan(5);
+    expect(samples.filter((sample) => sample.opacity !== "1")).toEqual([]);
+  });
+
+  test("a drag too short to commit springs the card back and changes nothing", async ({ page }) => {
+    const touch = await openTouch(page);
+    await touch.start();
+    // Below the flick minimum, so even a fast release must not commit.
+    for (let step = 1; step <= 4; step += 1) await touch.move(touch.from.x - (step * 40) / 4, touch.from.y);
+    await touch.end(-40);
+    await expect(page.locator("#app-title")).toHaveText("Generator");
+    await expect(screen(page, "generator")).not.toHaveAttribute("style", /transform/);
+    await expect(screen(page, "lookup")).toHaveAttribute("hidden", "");
+    await expect(page.locator(".screen-host.stack-top")).toHaveCount(0);
+    await expect(screen(page, "generator")).not.toHaveClass(/stack-top/);
+  });
+});
+
 test.describe("Help page", () => {
   test("is reached from Settings and is not a bottom-navigation destination", async ({ page }) => {
     await nav(page, "settings").tap();
