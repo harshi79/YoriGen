@@ -441,15 +441,17 @@ test.describe("interactive stacked-card swipe", () => {
   test("the card follows the finger and the next page is staged underneath before release", async ({ page }) => {
     const touch = await openTouch(page);
     await touch.start();
-    for (let step = 1; step <= 4; step += 1) await touch.move(touch.from.x - (step * 200) / 4, touch.from.y);
+    for (let step = 1; step <= 8; step += 1) await touch.move(touch.from.x - (step * 240) / 8, touch.from.y);
 
     // Still held down: the navigation has not happened, but the card has moved
-    // with the finger and the next page is already revealed behind it.
+    // with the finger and the next page is already revealed behind it. The
+    // frames are painted asynchronously, so poll rather than read once.
     await expect(page.locator("#app-title")).toHaveText("Generator");
     const card = page.locator(".screen-host.stack-top");
     await expect(card).toHaveAttribute("data-screen", "generator");
-    const offset = await card.evaluate((element) => new DOMMatrixReadOnly(getComputedStyle(element).transform).m41);
-    expect(offset).toBeLessThan(-100);
+    await expect
+      .poll(() => card.evaluate((element) => new DOMMatrixReadOnly(getComputedStyle(element).transform).m41))
+      .toBeLessThan(-100);
     const under = screen(page, "lookup");
     await expect(under).toHaveClass(/stack-under/);
     await expect(under).not.toHaveAttribute("hidden");
