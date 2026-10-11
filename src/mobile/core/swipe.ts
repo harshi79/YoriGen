@@ -13,10 +13,16 @@
  *     travel by a fixed ratio, the gesture locks and `onDragStart` fires. The
  *     pointer is captured so the drag keeps tracking outside the host. If
  *     vertical travel wins first, the gesture is released back to the page.
- *  3. Live drag. Every move reports the travel to `onDragMove`, so the content
- *     follows the finger.
+ *  3. Live drag. Every move reports the travel measured from the pointer-down
+ *     point, so the content is offset by exactly as much as the finger has
+ *     moved: at the lock it catches up with the slop it needed to resolve the
+ *     axis, and from then on it tracks the finger one to one. Nothing in this
+ *     handler reads layout, touches the DOM outside the two composited
+ *     properties the caller writes, or allocates.
  *  4. Release. `onDragEnd` reports the total travel and the release velocity.
- *     The caller decides whether to commit with `shouldCommitSwipe`.
+ *     The caller decides whether to commit with `shouldCommitSwipe`. The travel
+ *     it reports is the same distance the content moved, so the commit
+ *     threshold is measured against the finger, not against the slop.
  *
  * The host carries `touch-action: pan-y`, so the browser keeps vertical panning
  * and hands horizontal travel to us without a `preventDefault` fight.
@@ -43,7 +49,10 @@ export const SWIPE_FLICK_VELOCITY = 0.5;
 
 /** Width used when the host has not been laid out (for example in tests). */
 const FALLBACK_WIDTH = 360;
+/** Only travel inside this window decides the release velocity. */
 const VELOCITY_WINDOW_MS = 100;
+/** Ring size for the samples that window is read from. */
+const SAMPLE_COUNT = 16;
 
 /**
  * Pure decision on release. A drag commits when it covers a set share of the
@@ -70,8 +79,9 @@ export interface SwipeOptions {
   /** The drag has locked as horizontal. `direction` is its initial side. */
   onDragStart(direction: SwipeDirection): void;
   /**
-   * Horizontal offset since the lock, so the content starts at rest and
-   * follows the finger from there.
+   * Horizontal offset since the pointer went down, in CSS px, negative when
+   * the finger moved left. The content is placed at exactly this offset, so it
+   * sits under the finger for the rest of the gesture.
    */
   onDragMove(offset: number): void;
   /** The finger lifted. The caller decides whether the drag commits. */
@@ -90,28 +100,40 @@ export function attachSwipe(target: HTMLElement, options: SwipeOptions): () => v
   let startY = 0;
   let candidate = false;
   let locked = false;
-  let lockOffset = 0;
   let pointerId = -1;
-  let samples: { t: number; x: number }[] = [];
+  // Recent pointer positions, in fixed typed buffers: recording a sample is an
+  // index write, so a fast drag never allocates and never collects garbage.
+  const sampleTime = new Float64Array(SAMPLE_COUNT);
+  const sampleX = new Float64Array(SAMPLE_COUNT);
+  let sampleHead = 0;
+  let sampleCount = 0;
 
-  const recordSample = (x: number) => {
-    const t = Date.now();
-    samples.push({ t, x });
-    samples = samples.filter((sample) => t - sample.t <= VELOCITY_WINDOW_MS);
+  const recordSample = (x: number, t = performance.now()) => {
+    sampleTime[sampleHead] = t;
+    sampleX[sampleHead] = x;
+    sampleHead = (sampleHead + 1) % SAMPLE_COUNT;
+    if (sampleCount < SAMPLE_COUNT) sampleCount += 1;
   };
 
+  /** Travel per millisecond over the last VELOCITY_WINDOW_MS of the gesture. */
   const velocity = (): number => {
-    const first = samples[0];
-    const last = samples[samples.length - 1];
-    if (!first || !last) return 0;
-    const elapsed = last.t - first.t;
-    return elapsed > 0 ? (last.x - first.x) / elapsed : 0;
+    if (sampleCount < 2) return 0;
+    const newest = (sampleHead - 1 + SAMPLE_COUNT) % SAMPLE_COUNT;
+    const newestTime = sampleTime[newest];
+    let oldest = newest;
+    for (let step = 1; step < sampleCount; step += 1) {
+      const index = (newest - step + SAMPLE_COUNT * 2) % SAMPLE_COUNT;
+      if (newestTime - sampleTime[index] > VELOCITY_WINDOW_MS) break;
+      oldest = index;
+    }
+    const elapsed = newestTime - sampleTime[oldest];
+    return elapsed > 0 ? (sampleX[newest] - sampleX[oldest]) / elapsed : 0;
   };
 
   const reset = () => {
     candidate = false;
     locked = false;
-    samples = [];
+    sampleCount = 0;
   };
 
   const onPointerDown = (event: PointerEvent) => {
@@ -137,7 +159,6 @@ export function attachSwipe(target: HTMLElement, options: SwipeOptions): () => v
       const horizontal = Math.abs(dx) >= SWIPE_LOCK_SLOP && Math.abs(dx) >= Math.abs(dy) * axisRatio;
       if (horizontal) {
         locked = true;
-        lockOffset = dx;
         // Keep the drag even if the pointer leaves the host. Capture is taken
         // only now, so taps on controls are never redirected.
         try {
@@ -155,7 +176,9 @@ export function attachSwipe(target: HTMLElement, options: SwipeOptions): () => v
       }
     }
     recordSample(event.clientX);
-    options.onDragMove(dx - lockOffset);
+    // Absolute travel: the card is offset by exactly what the finger has moved
+    // since it went down, so it sits under the finger for the whole drag.
+    options.onDragMove(dx);
   };
 
   const onPointerUp = (event: PointerEvent) => {

@@ -27,7 +27,9 @@ describe("mobile shell", () => {
     expect($("#app-title").textContent).toBe("Generator");
     expect($("#offline-pill").hidden).toBe(false);
     expect(visibleScreen()).toBe("generator");
-    // Only the start tool is built at launch.
+    // Only the start tool is built on the critical path at launch; the
+    // neighbours are pre-built later, while the app is idle (see the swipe
+    // suite), so a first swipe never creates DOM under a finger.
     expect(shell.screen("generator")).toBeDefined();
     expect(shell.screen("lookup")).toBeUndefined();
   });
@@ -207,6 +209,21 @@ describe("mobile shell", () => {
     expect(document.querySelector('.bottom-nav [data-tool="home"]')).not.toBeNull();
     $<HTMLButtonElement>('[data-screen="flaky"] .state-error button').click();
     expect(document.querySelector("#flaky-ok")).not.toBeNull();
+  });
+
+  it("ignores a retry from a screen the user has already left", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const registry = new ToolRegistry()
+      .register({ id: "home", navLabel: "Home", title: "Home", description: "Start tool for tests", icon: Braces, network: "none", create: () => ({ root: document.createElement("div") }) })
+      .register({ id: "flaky", navLabel: "Flaky", title: "Flaky", description: "Never starts", icon: Braces, network: "none", create: () => { throw new Error("boom"); } });
+    const { shell } = bootShell({ registry, startId: "home" });
+    $('.bottom-nav [data-tool="flaky"]').click();
+    const retry = $<HTMLButtonElement>('[data-screen="flaky"] .state-error button');
+    $('.bottom-nav [data-tool="home"]').click();
+    retry.click();
+    // A stale retry button must not pull the user back to a screen they left.
+    expect(shell.navigator.current).toBe("home");
+    expect(visibleScreen()).toBe("home");
   });
 
   it("calls tool lifecycle hooks", () => {

@@ -311,29 +311,53 @@ svg {
   background: var(--bg);
 }
 /* Interactive stacked cards (see ui/stack-transition.ts). The card under the
-   finger sits above the destination it reveals. The underlying page is scaled
-   down and dimmed by --stack-dim, which the controller updates per frame. */
+   finger sits above the destination it reveals; the staged page is scaled down
+   once and dimmed by its veil. Everything the drag loop writes is a composited
+   property — a transform on the card, an opacity on the veil — so no frame of
+   the gesture recalculates style, lays out, repaints or blurs a shadow. Note,
+   in particular, that the moving card carries no `box-shadow`, no
+   `border-radius` and no `overflow: hidden`: on Android each of those turns a
+   composited move into a full-screen re-raster (or a clip-mask) per frame. */
 .screen-host.stack-top {
   z-index: 2;
 }
 .screen-host.stack-under {
   z-index: 1;
-}
-.screen-host.stack-under::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: #000;
-  opacity: var(--stack-dim, 0);
-  pointer-events: none;
+  transform: scale(0.92);
 }
 .screen-host.stack-moving {
   will-change: transform;
-  overflow: hidden;
-  border-radius: 20px;
 }
-.screen-host.stack-top.stack-moving {
-  box-shadow: 0 0 32px rgba(0, 0, 0, 0.38);
+/* Once the card has left, the staged page grows from 0.92 to full size. A
+   compositor transition, so the growth costs no main-thread frame. */
+.screen-host.stack-settle {
+  transition: transform 200ms var(--ease);
+  transform: none;
+  will-change: transform;
+}
+/* The dim over a staged page. It is an element rather than a pseudo-element
+   driven by a custom property: writing a custom property invalidates style for
+   the whole subtree, while an opacity write on an element that already has its
+   own compositor layer costs nothing. The gradient darkens the page where it
+   meets the edges of the screen, standing in for a blurred shadow. */
+.screen-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.95),
+    rgba(0, 0, 0, 0.58) 9%,
+    rgba(0, 0, 0, 0.58) 91%,
+    rgba(0, 0, 0, 0.95)
+  );
+}
+.screen-host.stack-under .screen-veil {
+  visibility: visible;
+  will-change: opacity;
 }
 /* Directional reveal for a swipe or a bottom-navigation change. Short and
    restrained: a small offset plus a fade, never a full-screen slide. The

@@ -156,6 +156,15 @@ export function mountShell(options: ShellOptions): Shell {
     return element;
   }
 
+  /**
+   * Adds the dim veil a staged page carries during a swipe. It is an element
+   * rather than a pseudo-element so the drag only has to write one composited
+   * opacity (see ui/stack-transition.ts).
+   */
+  function addVeil(target: HTMLElement): void {
+    target.append(h("div", { class: "screen-veil", "aria-hidden": "true" }));
+  }
+
   function ensureScreen(id: string): ToolScreen | undefined {
     const existing = screens.get(id);
     if (existing) return existing;
@@ -165,6 +174,7 @@ export function mountShell(options: ShellOptions): Shell {
       const screen = tool.create(context);
       screens.set(id, screen);
       replace(target, screen.root);
+      addVeil(target);
       return screen;
     } catch (error) {
       console.error(`[origen] ${tool.id} failed to start`, error);
@@ -183,6 +193,7 @@ export function mountShell(options: ShellOptions): Shell {
           }),
         ),
       );
+      addVeil(target);
       return undefined;
     }
   }
@@ -242,6 +253,7 @@ export function mountShell(options: ShellOptions): Shell {
       // in-flight swipe is abandoned so the plain layout is restored first.
       stack.abort();
       show(event.to, committingSwipe ? null : directionBetween(event.from, event.to));
+      scheduleWarmUp();
     } else screens.get(event.id)?.reselect?.();
   });
 
@@ -270,8 +282,25 @@ export function mountShell(options: ShellOptions): Shell {
   // once the card has settled. A visible alternative always exists: the
   // bottom navigation, and the segmented view tabs inside Generator and Card
   // Sorter. Swiping never hides content that cannot also be reached by a tap.
+  //
+  // Host width is cached and refreshed off the gesture path: the drag loop must
+  // never read layout, because a forced layout inside a pointermove handler
+  // stalls the very frame the finger is waiting for.
+  const measureHost = () => screensHost.clientWidth || window.innerWidth || 0;
+  let hostWidth = measureHost();
+  const refreshWidth = () => {
+    const width = measureHost();
+    if (width === hostWidth) return;
+    hostWidth = width;
+    // A different width mid-gesture makes the captured offset meaningless:
+    // spring back rather than navigate by a distance that no longer means it.
+    stack.cancel();
+  };
+  if (typeof ResizeObserver === "function") new ResizeObserver(refreshWidth).observe(screensHost);
+  else window.addEventListener("resize", refreshWidth);
+
   const stack = createStackTransition({
-    width: () => screensHost.clientWidth,
+    width: () => hostWidth,
     reducedMotion: prefersReducedMotion,
     activeId: () => navigator.current,
     neighbour: (direction) => {
@@ -304,6 +333,50 @@ export function mountShell(options: ShellOptions): Shell {
     onDragCancel: () => stack.cancel(),
   });
 
+  /**
+   * Builds the neighbouring destinations while nothing is happening, so the
+   * first swipe never has to create a screen's DOM between a finger's down and
+   * its first movement — the one stall a user is guaranteed to notice. The
+   * neighbours are laid out once here (offscreen, in a single task, so nothing
+   * is painted) and hidden again.
+   */
+  function warmNeighbours(): void {
+    // Never build DOM under a finger: wait for the gesture to finish.
+    if (stack.isBusy()) {
+      scheduleWarmUp();
+      return;
+    }
+    const index = navIds.indexOf(navigator.current);
+    if (index < 0) return;
+    for (const id of [navIds[index - 1], navIds[index + 1]]) {
+      if (!id || screens.has(id)) continue;
+      ensureScreen(id);
+      const target = containers.get(id);
+      if (!target) continue;
+      target.hidden = false;
+      void target.offsetHeight;
+      target.hidden = true;
+    }
+  }
+
+  const WARM_DELAY_MS = 400;
+  let warmTimer = 0;
+  function scheduleWarmUp(): void {
+    window.clearTimeout(warmTimer);
+    warmTimer = window.setTimeout(warmNeighbours, WARM_DELAY_MS);
+  }
+
+  // A gesture the platform interrupts without a pointercancel (the app going to
+  // the background mid-drag, for example) must not leave a card parked
+  // off-centre. Back, taps and dialogs already abort through the navigator.
+  const abandonGesture = () => {
+    if (stack.isBusy()) stack.abort();
+  };
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) abandonGesture();
+  });
+  window.addEventListener("blur", abandonGesture);
+
   // ---------- Environment ----------
   watchKeyboard((open) => {
     app.dataset.keyboard = open ? "open" : "closed";
@@ -329,6 +402,7 @@ export function mountShell(options: ShellOptions): Shell {
   // Start on the requested destination without growing Back history.
   show(options.startId);
   if (initial !== options.startId) navigator.navigate(initial);
+  scheduleWarmUp();
 
   return {
     navigator,
