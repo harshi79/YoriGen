@@ -266,11 +266,11 @@ describe("ORIGEN typography system", () => {
 
   it("applies uppercase as presentation only, and only to micro-labels", () => {
     const uppercased = [...mobileCss.matchAll(/^([.:#\w[\]=" -]+)\{[^}]*text-transform:\s*uppercase/gm)].map((m) => m[1].trim());
-    expect([...uppercased].sort()).toEqual([".badge", ".brand-name", ".eyebrow"]);
+    expect([...uppercased].sort()).toEqual([".badge", ".brand-name"]);
   });
 
   it("never re-cases text at runtime", () => {
-    for (const file of ["tools/generator.ts", "tools/lookup.ts", "tools/sorter.ts", "tools/settings.ts", "shell.ts", "ui/components.ts"]) {
+    for (const file of ["tools/generator.ts", "tools/lookup.ts", "tools/sorter.ts", "tools/settings.ts", "tools/help.ts", "shell.ts", "ui/components.ts", "ui/community.ts"]) {
       expect(read(`../../src/mobile/${file}`), `${file} does not re-case UI text`).not.toContain(".toUpperCase()");
     }
   });
