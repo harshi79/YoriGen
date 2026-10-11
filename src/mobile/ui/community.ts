@@ -1,5 +1,6 @@
 import { ArrowUpRight, MessageCircle, Send, UsersRound } from "lucide";
-import type { KeyValueStorage, PlatformKind } from "../platform/types";
+import type { PlatformKind } from "../platform/types";
+import { externalLinkAttrs } from "./components";
 import { h, icon } from "./dom";
 import type { Sheets } from "./sheet";
 
@@ -7,43 +8,41 @@ export const COMMUNITY_LINKS = {
   methods: "https://t.me/+y8EekRvqpnQzNjZl",
   chat: "https://t.me/+nzIAZDVK_61lZDQ9",
 } as const;
-const DISMISSED_KEY = "community.dismissed.v1";
 
-/** One controller per app boot. Navigating or remounting a screen never reopens it. */
-export function createCommunityPrompt(storage: KeyValueStorage, sheets: Sheets, kind: PlatformKind) {
+/**
+ * The launch prompt for the Yori community.
+ *
+ * The prompt is shown on every fresh app launch and its dismissal is never
+ * persisted: one controller exists per app boot, so closing it dismisses it for
+ * the rest of that session and the next cold start shows it again. Nothing here
+ * reads the network, storage, a remote flag or a signed-in user — the decision
+ * to show it is purely local startup logic.
+ *
+ * "Session" means one live app process. Backgrounding the app and returning to
+ * it from Recents keeps the same process (and therefore the same controller),
+ * so the prompt does not reopen; Android starting a new process does.
+ */
+export function createCommunityPrompt(sheets: Sheets, kind: PlatformKind) {
   let attempted = false;
 
   return {
-    async showIfNeeded() {
+    /** Opens the prompt once per app boot. Safe to call repeatedly. */
+    showIfNeeded() {
+      // One prompt per launch: navigation, remounts and re-renders never reopen it.
       if (attempted) return;
       attempted = true;
-      try {
-        if ((await storage.get(DISMISSED_KEY)) === "true") return;
-      } catch {
-        // An unavailable preference store must never hold up the app.
-      }
 
-      let dismissed = false;
-      const remember = () => {
-        if (dismissed) return;
-        dismissed = true;
-        void storage.set(DISMISSED_KEY, "true").catch(() => {
-          // This launch is still dismissed, even when persistence is unavailable.
-        });
-      };
       const invite = (href: string, label: string, description: string, symbol: typeof Send, style: string) =>
         h(
           "a",
           {
             class: `community-invite ${style}`,
             href,
-            // Android's Capacitor WebView intercepts same-window HTTPS navigation
-            // with ACTION_VIEW (Telegram if installed, otherwise a browser).
-            // Browser previews open a separate tab rather than leaving the tools.
-            ...(kind === "web" ? { target: "_blank", rel: "noopener noreferrer" } : {}),
+            // See externalLinkAttrs. If nothing on the device can handle the
+            // URL, Capacitor drops it and the shell stays usable.
+            ...externalLinkAttrs(kind),
             onClick: () => {
-              remember();
-              // Let the anchor's native navigation run before removing it.
+              // Let the anchor's native navigation start before removing it.
               setTimeout(() => sheet.close(), 0);
             },
           },
@@ -54,24 +53,23 @@ export function createCommunityPrompt(storage: KeyValueStorage, sheets: Sheets, 
 
       const sheet = sheets.open({
         title: "Join the Yori Community",
-        description: "Explore YoriMethods for updates and ideas, or join the chat to connect with the community.",
+        description: "YoriMethods posts updates and methods. The chat group is for questions and support.",
         content: [
           h("div", { class: "community-emblem", "aria-hidden": "true" }, icon(Send)),
-          h("p", { class: "eyebrow community-eyebrow" }, "Find your people"),
           h(
             "div",
             { class: "community-invites" },
-            invite(COMMUNITY_LINKS.methods, "Join YoriMethods", "News, methods & inspiration", Send, "community-invite-primary"),
-            invite(COMMUNITY_LINKS.chat, "Join Chat Group", "Questions, conversation & support", MessageCircle, "community-invite-secondary"),
+            invite(COMMUNITY_LINKS.methods, "Join YoriMethods", "Updates and methods", Send, "community-invite-primary"),
+            invite(COMMUNITY_LINKS.chat, "Join Chat Group", "Questions and support", MessageCircle, "community-invite-secondary"),
           ),
-          h("p", { class: "community-note" }, icon(UsersRound), "Opens outside ORIGEN · No account required to keep using the app"),
+          h("p", { class: "community-note" }, icon(UsersRound), "Opens outside ORIGEN. No Telegram account is needed to keep using the app."),
         ],
         actions: (close) => [h("button", { type: "button", class: "btn btn-ghost community-later", onClick: () => close() }, "Maybe later")],
       });
       sheet.element.classList.add("community-dialog");
-      // The close button, Maybe later, backdrop, Escape and Android Back all
-      // resolve the same sheet.closed promise and count as a dismissal.
-      void sheet.closed.then(remember);
+      // Closing by any route (X, Maybe later, backdrop, Escape, Android Back)
+      // dismisses the prompt for this session; choosing an invite does too.
+      return sheet;
     },
   };
 }

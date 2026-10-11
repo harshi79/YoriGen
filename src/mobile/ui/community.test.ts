@@ -3,82 +3,138 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { $, bootShell } from "../test-support";
 import { createCommunityPrompt, COMMUNITY_LINKS } from "./community";
 
-const key = "community.dismissed.v1";
 afterEach(() => {
   document.body.innerHTML = "";
   vi.restoreAllMocks();
 });
 
-describe("first-launch community prompt", () => {
-  it("uses the exact HTTPS invites, native Android navigation and both close paths", async () => {
-    const { shell, platform, store } = bootShell();
-    const prompt = createCommunityPrompt(platform.storage, shell.context.ui.sheets, "android");
-    await prompt.showIfNeeded();
-    const dialog = $<HTMLDialogElement>("dialog.community-dialog");
-    expect(dialog.open).toBe(true);
-    expect(dialog.getAttribute("aria-labelledby")).toBeTruthy();
-    expect(dialog.getAttribute("aria-describedby")).toBeTruthy();
-    expect(dialog.textContent).toContain("Join the Yori Community");
-    const links = [...dialog.querySelectorAll<HTMLAnchorElement>("a.community-invite")];
+const dialog = () => document.querySelector<HTMLDialogElement>("dialog.community-dialog");
+
+describe("launch community prompt", () => {
+  it("opens on launch with both exact invites and native Android navigation", () => {
+    const { shell } = bootShell();
+    createCommunityPrompt(shell.context.ui.sheets, "android").showIfNeeded();
+    const open = $<HTMLDialogElement>("dialog.community-dialog");
+    expect(open.open).toBe(true);
+    expect(open.getAttribute("aria-labelledby")).toBeTruthy();
+    expect(open.getAttribute("aria-describedby")).toBeTruthy();
+    expect(open.textContent).toContain("Join the Yori Community");
+    const links = [...open.querySelectorAll<HTMLAnchorElement>("a.community-invite")];
     expect(links.map((a) => [a.textContent?.includes("Join YoriMethods"), a.textContent?.includes("Join Chat Group"), a.href, a.target])).toEqual([
       [true, false, COMMUNITY_LINKS.methods, ""],
       [false, true, COMMUNITY_LINKS.chat, ""],
     ]);
-    dialog.querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click();
-    await vi.waitFor(() => expect(store.get(key)).toBe("true"));
-    await prompt.showIfNeeded();
-    expect(document.querySelector("dialog.community-dialog")).toBeNull();
-    expect(shell.navigator.current).toBe("generator");
   });
 
-  it("remembers Maybe later across fresh app boots and does not reappear on navigation", async () => {
+  it("keeps both Close and Maybe later, and each dismisses the prompt", () => {
+    const { shell } = bootShell();
+    const prompt = createCommunityPrompt(shell.context.ui.sheets, "android");
+    prompt.showIfNeeded();
+    $('dialog.community-dialog [aria-label="Close"]').click();
+    expect(dialog()).toBeNull();
+    // Same session: the prompt stays dismissed and is never re-shown.
+    prompt.showIfNeeded();
+    expect(dialog()).toBeNull();
+  });
+
+  it("dismisses for the session only and never writes to storage", () => {
     const { shell, platform, store } = bootShell();
-    await createCommunityPrompt(platform.storage, shell.context.ui.sheets, "web").showIfNeeded();
-    expect($<HTMLAnchorElement>(`a[href="${COMMUNITY_LINKS.methods}"]`).target).toBe("_blank");
-    expect($<HTMLAnchorElement>(`a[href="${COMMUNITY_LINKS.chat}"]`).rel).toBe("noopener noreferrer");
+    const prompt = createCommunityPrompt(shell.context.ui.sheets, "android");
+    prompt.showIfNeeded();
     $(".community-later").click();
-    await vi.waitFor(() => expect(store.get(key)).toBe("true"));
-    shell.context.navigate("sorter");
-    shell.context.navigate("generator");
-    expect(document.querySelector("dialog.community-dialog")).toBeNull();
-    const { shell: nextShell, platform: nextPlatform } = bootShell();
-    nextPlatform.storage.get.mockResolvedValue("true");
-    await createCommunityPrompt(nextPlatform.storage, nextShell.context.ui.sheets, "android").showIfNeeded();
-    expect(document.querySelector("dialog.community-dialog")).toBeNull();
+    expect(dialog()).toBeNull();
+    expect(platform.storage.set).not.toHaveBeenCalled();
+    expect(platform.storage.get).not.toHaveBeenCalled();
+    expect(store.size).toBe(0);
   });
 
-  it("Back dismisses before navigation and stores the choice", async () => {
-    const { shell, platform, pressSystemBack } = bootShell({ hash: "#/lookup" });
-    await createCommunityPrompt(platform.storage, shell.context.ui.sheets, "android").showIfNeeded();
+  it("shows again on a fresh app boot, because nothing was persisted", () => {
+    const { shell } = bootShell();
+    createCommunityPrompt(shell.context.ui.sheets, "android").showIfNeeded();
+    $(".community-later").click();
+    expect(dialog()).toBeNull();
+
+    // A cold start is a new app process: a new shell and a new controller.
+    const next = bootShell();
+    createCommunityPrompt(next.shell.context.ui.sheets, "android").showIfNeeded();
+    expect(dialog()).not.toBeNull();
+  });
+
+  it("does not reopen during navigation, remounts or repeated calls in one session", () => {
+    const { shell } = bootShell({ hash: "#/lookup" });
+    const prompt = createCommunityPrompt(shell.context.ui.sheets, "android");
+    prompt.showIfNeeded();
+    $(".community-later").click();
+
+    shell.context.navigate("sorter");
+    shell.context.navigate("settings");
+    shell.context.navigate("generator");
+    shell.context.navigate("lookup");
+    prompt.showIfNeeded();
+    prompt.showIfNeeded();
+    expect(dialog()).toBeNull();
+    expect(shell.navigator.current).toBe("lookup");
+  });
+
+  it("never stacks a second dialog if showIfNeeded runs twice before dismissal", () => {
+    const { shell } = bootShell();
+    const prompt = createCommunityPrompt(shell.context.ui.sheets, "android");
+    prompt.showIfNeeded();
+    prompt.showIfNeeded();
+    expect(document.querySelectorAll("dialog.community-dialog")).toHaveLength(1);
+  });
+
+  it("shows while offline and without touching the network", async () => {
+    const { shell } = bootShell({ online: false });
+    createCommunityPrompt(shell.context.ui.sheets, "android").showIfNeeded();
+    const open = $<HTMLDialogElement>("dialog.community-dialog");
+    expect(open.open).toBe(true);
+    expect($(".offline-pill").hidden).toBe(false);
+    // Dismissing offline behaves exactly the same.
+    $(".community-later").click();
+    expect(dialog()).toBeNull();
+    shell.context.navigate("sorter");
+    expect(shell.navigator.current).toBe("sorter");
+  });
+
+  it("Back dismisses before navigation and leaves the selected tool alone", () => {
+    const { shell, pressSystemBack } = bootShell({ hash: "#/lookup" });
+    createCommunityPrompt(shell.context.ui.sheets, "android").showIfNeeded();
     pressSystemBack();
-    await vi.waitFor(() => expect(platform.storage.set).toHaveBeenCalledWith(key, "true"));
+    expect(dialog()).toBeNull();
     expect(shell.navigator.current).toBe("lookup");
     pressSystemBack();
     expect(shell.navigator.current).toBe("generator");
   });
 
-  it("keeps the shell usable if reading or writing preferences fails", async () => {
+  it("shows even when preferences are unavailable, since it reads no preference", () => {
     const { shell, platform } = bootShell();
     platform.storage.get.mockRejectedValue(new Error("unavailable"));
     platform.storage.set.mockRejectedValue(new Error("unavailable"));
-    const prompt = createCommunityPrompt(platform.storage, shell.context.ui.sheets, "android");
-    await expect(prompt.showIfNeeded()).resolves.toBeUndefined();
+    const prompt = createCommunityPrompt(shell.context.ui.sheets, "android");
+    prompt.showIfNeeded();
+    expect(dialog()).not.toBeNull();
     $(".community-later").click();
-    await prompt.showIfNeeded();
-    expect(document.querySelector("dialog.community-dialog")).toBeNull();
+    prompt.showIfNeeded();
+    expect(dialog()).toBeNull();
     shell.context.navigate("sorter");
     expect(shell.navigator.current).toBe("sorter");
   });
 
-  it("marks an invite choice dismissed before the external navigation", async () => {
-    const { shell, platform, store } = bootShell();
-    await createCommunityPrompt(platform.storage, shell.context.ui.sheets, "android").showIfNeeded();
+  it("closes on an invite choice and leaves the shell usable when nothing can open the link", () => {
+    const { shell } = bootShell();
+    createCommunityPrompt(shell.context.ui.sheets, "android").showIfNeeded();
     const link = $<HTMLAnchorElement>(`a[href="${COMMUNITY_LINKS.chat}"]`);
-    link.addEventListener("click", (event) => event.preventDefault()); // no navigation in the DOM test
+    // Stand in for a device with no Telegram and no handler for the URL: the
+    // navigation is prevented and the app must simply carry on.
+    link.addEventListener("click", (event) => event.preventDefault());
     link.click();
-    expect(platform.storage.set).toHaveBeenCalledWith(key, "true");
-    await vi.waitFor(() => expect(document.querySelector("dialog.community-dialog")).toBeNull());
-    expect(store.get(key)).toBe("true");
+    expect(dialog()).not.toBeNull(); // closes on the next tick
+    return vi.waitFor(() => {
+      expect(dialog()).toBeNull();
+      shell.context.navigate("settings");
+      expect(shell.navigator.current).toBe("settings");
+    });
   });
 
   it("only accepts known destination constants, not a runtime URL", () => {
