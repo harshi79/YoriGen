@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { $, bootShell } from "../test-support";
+import { Send } from "lucide";
 import { createCommunityPrompt, COMMUNITY_LINKS } from "./community";
+import { icon } from "./dom";
 
 afterEach(() => {
   document.body.innerHTML = "";
@@ -135,6 +137,29 @@ describe("launch community prompt", () => {
       shell.context.navigate("settings");
       expect(shell.navigator.current).toBe("settings");
     });
+  });
+
+  it("shows the Telegram paper-plane mark exactly once, on the YoriMethods invite", () => {
+    const { shell } = bootShell();
+    createCommunityPrompt(shell.context.ui.sheets, "android").showIfNeeded();
+    const open = $<HTMLDialogElement>("dialog.community-dialog");
+    // Regression: the prompt used to show the same mark twice, once as a
+    // decorative badge above the invites and once on the YoriMethods invite.
+    const paperPlane = icon(Send).innerHTML;
+    const marks = [...open.querySelectorAll("svg")].filter((svg) => svg.innerHTML === paperPlane);
+    expect(marks).toHaveLength(1);
+    expect(marks[0].closest("a")?.getAttribute("href")).toBe(COMMUNITY_LINKS.methods);
+    expect(open.querySelector(".community-emblem")).toBeNull();
+  });
+
+  it("keeps the description directly above the invites, with the invites in their own block", () => {
+    const { shell } = bootShell();
+    createCommunityPrompt(shell.context.ui.sheets, "android").showIfNeeded();
+    const open = $<HTMLDialogElement>("dialog.community-dialog");
+    const invites = open.querySelector(".community-invites");
+    expect(invites?.querySelectorAll("a.community-invite")).toHaveLength(2);
+    expect(invites?.previousElementSibling).toBeNull(); // first child of .sheet-body
+    expect(invites?.parentElement?.classList.contains("sheet-body")).toBe(true);
   });
 
   it("only accepts known destination constants, not a runtime URL", () => {

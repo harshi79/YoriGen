@@ -55,7 +55,6 @@ export function createCommunityPrompt(sheets: Sheets, kind: PlatformKind) {
         title: "Join the Yori Community",
         description: "YoriMethods posts updates and methods. The chat group is for questions and support.",
         content: [
-          h("div", { class: "community-emblem", "aria-hidden": "true" }, icon(Send)),
           h(
             "div",
             { class: "community-invites" },

@@ -20,6 +20,7 @@ import type { BinMetadataService } from "./services/bin-service";
 import { errorState } from "./ui/components";
 import { h, icon, prefersReducedMotion, replace, scrollBehavior } from "./ui/dom";
 import { createSheets } from "./ui/sheet";
+import { createStackTransition } from "./ui/stack-transition";
 import { createToaster } from "./ui/toast";
 
 export interface ShellOptions {
@@ -232,9 +233,16 @@ export function mountShell(options: ShellOptions): Shell {
     return b > a ? "left" : "right";
   }
 
+  // Set only while a settled swipe commits: the card is already in place, so
+  // the incoming screen must not play its entrance a second time.
+  let committingSwipe = false;
   navigator.subscribe((event) => {
-    if (event.type === "navigate") show(event.to, directionBetween(event.from, event.to));
-    else screens.get(event.id)?.reselect?.();
+    if (event.type === "navigate") {
+      // Any navigation, a tap or Back, takes over the screen host: an
+      // in-flight swipe is abandoned so the plain layout is restored first.
+      stack.abort();
+      show(event.to, committingSwipe ? null : directionBetween(event.from, event.to));
+    } else screens.get(event.id)?.reselect?.();
   });
 
   // ---------- Back handling ----------
@@ -257,19 +265,43 @@ export function mountShell(options: ShellOptions): Shell {
   });
 
   // ---------- Swipe between destinations ----------
-  // A visible alternative always exists: the bottom navigation, and the
-  // segmented view tabs inside Generator and Card Sorter. Swiping never hides
-  // content that cannot also be reached by a tap.
-  attachSwipe(screensHost, {
-    // An open sheet or dialog owns the gesture; the host is behind it.
-    isEnabled: () => !overlayHost.querySelector("dialog[open]"),
-    onSwipe: (direction) => {
+  // The active screen is a card that follows the finger. The neighbour sits
+  // beneath it and is revealed as the card moves, then the navigation happens
+  // once the card has settled. A visible alternative always exists: the
+  // bottom navigation, and the segmented view tabs inside Generator and Card
+  // Sorter. Swiping never hides content that cannot also be reached by a tap.
+  const stack = createStackTransition({
+    width: () => screensHost.clientWidth,
+    reducedMotion: prefersReducedMotion,
+    activeId: () => navigator.current,
+    neighbour: (direction) => {
       const index = navIds.indexOf(navigator.current);
       // A non-nav screen (Help) or an end of the list has no neighbour.
-      if (index < 0) return;
-      const next = navIds[direction === "left" ? index + 1 : index - 1];
-      if (next) navigator.navigate(next);
+      if (index < 0) return null;
+      return navIds[direction === "left" ? index + 1 : index - 1] ?? null;
     },
+    prepare: (id) => {
+      ensureScreen(id);
+      return containers.get(id);
+    },
+    container: (id) => containers.get(id),
+    commit: (id) => {
+      committingSwipe = true;
+      try {
+        return navigator.navigate(id);
+      } finally {
+        committingSwipe = false;
+      }
+    },
+  });
+  attachSwipe(screensHost, {
+    // An open sheet or dialog owns the gesture; the host is behind it. A
+    // settling card also owns the host until it lands.
+    isEnabled: () => !overlayHost.querySelector("dialog[open]") && !stack.isBusy(),
+    onDragStart: (direction) => stack.start(direction),
+    onDragMove: (offset) => stack.move(offset),
+    onDragEnd: (release) => stack.end(release),
+    onDragCancel: () => stack.cancel(),
   });
 
   // ---------- Environment ----------
