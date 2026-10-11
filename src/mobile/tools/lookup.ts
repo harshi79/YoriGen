@@ -110,9 +110,8 @@ function createLookupScreen(context: ToolContext): ToolScreen {
           resultHost,
           emptyState({
             iconNode: Fingerprint,
-            eyebrow: "Just the first few digits",
-            title: "Know the range, not the account",
-            body: "Enter a 6–8 digit prefix to see network, issuer and country metadata. Nothing is sent until you tap Look up.",
+            title: "No lookup yet",
+            body: "Enter a 6–8 digit prefix to see network, issuer and country metadata. Nothing is sent until you tap Look up metadata.",
           }),
         );
         return;
