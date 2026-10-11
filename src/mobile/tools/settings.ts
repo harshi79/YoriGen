@@ -1,43 +1,38 @@
 /**
- * Settings — appearance, connectivity, privacy and About.
+ * Settings — appearance, the tools, the BIN service, privacy and About.
+ *
+ * Every row here maps to behaviour that exists in the app; there is no setting
+ * without an implementation behind it.
  */
-import { BookOpen, Activity, ExternalLink, Info, LockKeyhole, Palette, Server, SlidersHorizontal, Trash2 } from "lucide";
+import { Activity, ChevronRight, CircleHelp, ExternalLink, Info, LockKeyhole, Palette, Server, SlidersHorizontal, Trash2 } from "lucide";
 import type { ToolContext } from "../core/context";
 import type { ThemePreference } from "../core/theme";
 import type { ToolDefinition, ToolScreen } from "../core/registry";
 import { BinServiceError } from "../services/bin-service";
-import { button, card, segmented } from "../ui/components";
+import { card, externalLinkAttrs, segmented } from "../ui/components";
 import { h, icon, plural, scrollBehavior } from "../ui/dom";
 
-function link(href: string, label: string) {
-  return h("a", { class: "list-link", href, target: "_blank", rel: "noopener noreferrer" }, h("span", {}, label), icon(ExternalLink));
+/** A row that opens a screen inside the app. */
+function navigateRow(options: { id: string; label: string; detail: string; onOpen: () => void }) {
+  return h(
+    "button",
+    { type: "button", class: "setting-row", id: options.id, onClick: options.onOpen },
+    h("span", { class: "setting-row-copy" }, h("strong", {}, options.label), h("small", {}, options.detail)),
+    icon(ChevronRight, "setting-row-chevron"),
+  );
 }
 
 function row(label: string, value: Node | string, id?: string) {
   return h("div", { class: "meta-row" }, h("dt", {}, label), h("dd", { id }, value));
 }
 
-function guideContent() {
-  return [
-    h(
-      "ol",
-      { class: "guide" },
-      h("li", {}, h("strong", {}, "Set your BIN. "), "Type 6–8 prefix digits, a masked template such as 5279109907xxxxxx, or turn on Auto. Visible digits are kept and each x is filled locally."),
-      h("li", {}, h("strong", {}, "Choose expiry and CVV. "), "Auto builds synthetic future dates and network-correct CVV widths. Custom values stay on this device."),
-      h("li", {}, h("strong", {}, "Generate up to 100 fixtures. "), "Visa, Mastercard, Amex, Discover, JCB, Diners, UnionPay, Maestro and RuPay, each with a Luhn check digit and labelled SYNTHETIC TEST FIXTURE."),
-      h("li", {}, h("strong", {}, "Copy or export. "), "Pipe, CSV or JSON. JSON includes synthetic: true."),
-    ),
-    h(
-      "p",
-      { class: "notice notice-warning" },
-      "A valid checksum does not mean an active account. These numbers are not reserved test numbers and may coincide with real ones. Never submit them to live payment systems; use your provider's official sandbox fixtures for gateway testing.",
-    ),
-    h(
-      "p",
-      { class: "hint" },
-      "ORIGEN never processes payments, authorizes transactions, checks balances, verifies cards or accounts, or stores card data. BIN Lookup sends only a 6–8 digit prefix for range metadata.",
-    ),
-  ];
+function link(kind: "android" | "web", href: string, label: string) {
+  return h(
+    "a",
+    { class: "setting-row setting-row-link", href, ...externalLinkAttrs(kind) },
+    h("span", { class: "setting-row-copy" }, h("strong", {}, label)),
+    icon(ExternalLink, "setting-row-chevron"),
+  );
 }
 
 function createSettingsScreen(context: ToolContext): ToolScreen {
@@ -59,39 +54,47 @@ function createSettingsScreen(context: ToolContext): ToolScreen {
     "dl",
     { class: "meta-list" },
     ...context.tools().map((tool) =>
-      row(tool.title, h("span", { class: tool.network === "none" ? "badge badge-good" : "badge badge-warn" }, tool.network === "none" ? "Works offline" : "Needs internet")),
+      row(
+        tool.title,
+        h("span", { class: tool.network === "none" ? "badge badge-good" : "badge badge-warn" }, tool.network === "none" ? "Works offline" : "Needs internet"),
+      ),
     ),
   );
 
   const statusBadge = h("span", { class: "badge", id: "settings-api-state" }, "Not checked");
-  const statusText = h("p", { class: "hint", id: "settings-api-status", "aria-live": "polite" }, "Status is checked only when you ask. No BIN is sent.");
+  const statusText = h("p", { class: "hint", id: "settings-api-status", "aria-live": "polite" }, "Checked only when you tap it. No BIN is sent.");
   let checking: AbortController | null = null;
-  const checkButton = button({
-    label: "Check service status",
-    iconNode: Activity,
-    id: "settings-check-api",
-    onClick: async () => {
-      if (checking) return;
-      checking = new AbortController();
-      checkButton.disabled = true;
-      statusBadge.textContent = "Checking";
-      statusBadge.className = "badge";
-      statusText.textContent = "Checking dataset readiness…";
-      try {
-        await binService.checkStatus(checking.signal);
-        statusBadge.textContent = "Ready";
-        statusBadge.className = "badge badge-good";
-        statusText.textContent = "The service answered ready just now. It is not monitored continuously.";
-      } catch (error) {
-        statusBadge.textContent = error instanceof BinServiceError && error.code === "offline" ? "Offline" : "Unavailable";
-        statusBadge.className = "badge badge-warn";
-        statusText.textContent = (error as Error).message;
-      } finally {
-        checking = null;
-        checkButton.disabled = false;
-      }
+  const checkButton = h(
+    "button",
+    {
+      type: "button",
+      class: "btn btn-secondary",
+      id: "settings-check-api",
+      onClick: async () => {
+        if (checking) return;
+        checking = new AbortController();
+        checkButton.disabled = true;
+        statusBadge.textContent = "Checking";
+        statusBadge.className = "badge";
+        statusText.textContent = "Checking whether the dataset is ready…";
+        try {
+          await binService.checkStatus(checking.signal);
+          statusBadge.textContent = "Ready";
+          statusBadge.className = "badge badge-good";
+          statusText.textContent = "The service answered ready just now. It is not monitored in the background.";
+        } catch (error) {
+          statusBadge.textContent = error instanceof BinServiceError && error.code === "offline" ? "Offline" : "Unavailable";
+          statusBadge.className = "badge badge-warn";
+          statusText.textContent = (error as Error).message;
+        } finally {
+          checking = null;
+          checkButton.disabled = false;
+        }
+      },
     },
-  });
+    icon(Activity),
+    h("span", {}, "Check status"),
+  );
 
   const versionValue = h("span", { class: "mono" }, config.version);
   const buildValue = h("span", { class: "mono" }, "—");
@@ -108,47 +111,92 @@ function createSettingsScreen(context: ToolContext): ToolScreen {
   const scroller = h(
     "div",
     { class: "screen-scroll" },
-    card({ title: "Appearance", iconNode: Palette }, themeControl.element, h("p", { class: "hint" }, "Dark is the default. System follows your phone's dark-mode setting. Only this choice is saved.")),
-    card({ title: "Tools", iconNode: SlidersHorizontal }, toolRows, h("p", { class: "hint" }, "Local tools need no connection. BIN Lookup contacts the metadata service below.")),
+    card(
+      { title: "Appearance", iconNode: Palette },
+      themeControl.element,
+      h("p", { class: "hint" }, "System follows your phone's dark mode. This is the only choice the app saves."),
+    ),
+
+    card(
+      { title: "Help", iconNode: CircleHelp },
+      navigateRow({
+        id: "settings-open-help",
+        label: "How to use ORIGEN",
+        detail: "Each tool, every setting, and what the app does not do",
+        onOpen: () => context.navigate("help"),
+      }),
+    ),
+
+    card(
+      { title: "Tools", iconNode: SlidersHorizontal },
+      toolRows,
+      h("p", { class: "hint" }, "Only BIN Lookup contacts the network."),
+    ),
+
     card(
       { title: "BIN metadata service", iconNode: Server },
-      h("dl", { class: "meta-list" }, row("Service", binService.label), row("Endpoint", h("span", { class: "mono break" }, binService.origin)), row("Status", statusBadge)),
+      h(
+        "dl",
+        { class: "meta-list" },
+        row("Service", binService.label),
+        row("Endpoint", h("span", { class: "mono break" }, binService.origin)),
+        row("Status", statusBadge),
+      ),
       statusText,
       h(
         "div",
         { class: "btn-row" },
         checkButton,
-        button({
-          label: "Clear session history",
-          iconNode: Trash2,
-          variant: "ghost",
-          id: "settings-clear-history",
-          onClick: () => {
-            const removed = context.events.emit("session:clear", undefined);
-            ui.toast(removed ? `${plural(removed, "recent lookup")} cleared` : "No session history to clear");
+        h(
+          "button",
+          {
+            type: "button",
+            class: "btn btn-ghost",
+            id: "settings-clear-history",
+            onClick: () => {
+              const removed = context.events.emit("session:clear", undefined);
+              ui.toast(removed ? `${plural(removed, "recent lookup")} cleared` : "No session history to clear");
+            },
           },
-        }),
+          icon(Trash2),
+          h("span", {}, "Clear history"),
+        ),
       ),
     ),
+
     card(
       { title: "Privacy", iconNode: LockKeyhole },
       h(
         "ul",
         { class: "plain-list" },
-        h("li", {}, "Generator and Card Sorter run entirely on this device."),
-        h("li", {}, "Only your theme choice is stored. Inputs, results and recent lookups are kept in memory and cleared when the app closes."),
+        h("li", {}, "Generator and Card Sorter run on this device."),
         h("li", {}, "BIN Lookup sends a 6–8 digit prefix only — never a full number, expiry or CVV."),
-        h("li", {}, "Exports are written to the app's private cache and handed to the share sheet. No storage permission is requested."),
+        h("li", {}, "Inputs, results and recent lookups are kept in memory and cleared when the app closes. Only the theme is stored."),
+        h("li", {}, "Exports go to the app's private cache and then to the share sheet. No storage permission is requested."),
+        h("li", {}, "No analytics, tracking or accounts."),
       ),
     ),
+
     card(
       { title: "About", iconNode: Info },
-      h("dl", { class: "meta-list" }, row("App", config.appName), row("Version", versionValue), row("Build", buildValue), row("Platform", platform.kind === "android" ? "Android" : "Web preview")),
-      button({ label: "How ORIGEN works", iconNode: BookOpen, id: "settings-guide", onClick: () => ui.sheets.open({ title: "A small tool for better tests", content: guideContent() }) }),
-      h("nav", { class: "link-list", "aria-label": "External links" }, link(config.communityUrl, "Join the ORIGEN channel on Telegram"), link(config.sourceUrl, "Source code")),
-      h("p", { class: "hint" }, "Synthetic test data for development and QA only. Licensed under the Apache License 2.0. BIN data: venelinkochev/bin-list-data (CC BY 4.0) via Guison."),
+      h(
+        "dl",
+        { class: "meta-list" },
+        row("App", config.appName),
+        row("Version", versionValue),
+        row("Build", buildValue),
+        row("Platform", platform.kind === "android" ? "Android" : "Web preview"),
+      ),
+      h(
+        "nav",
+        { class: "setting-links", "aria-label": "External links" },
+        link(platform.kind, config.communityUrl, "ORIGEN channel on Telegram"),
+        link(platform.kind, config.sourceUrl, "Source code"),
+      ),
+      h("p", { class: "hint" }, "Synthetic test data for development and QA. Apache License 2.0. BIN data: venelinkochev/bin-list-data, CC BY 4.0, via Guison."),
     ),
   );
+
   const root = h("div", { class: "screen", "data-tool": "settings" }, scroller);
 
   theme.subscribe(() => themeControl.set(theme.preference));
@@ -165,7 +213,7 @@ export const settingsTool: ToolDefinition = {
   id: "settings",
   navLabel: "Settings",
   title: "Settings",
-  description: "Appearance, connectivity, privacy and app information.",
+  description: "Appearance, tools, the BIN service, privacy and app information.",
   icon: SlidersHorizontal,
   network: "none",
   create: createSettingsScreen,
