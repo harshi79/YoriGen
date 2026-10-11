@@ -63,17 +63,26 @@ On Windows, run the Gradle steps from `android\` with `gradlew.bat` instead of
 
 ### Building in GitHub Actions
 
-`.github/workflows/android.yml` builds the debug APK on every pull request and
-push to `main`, checks that it requests only network permissions, and uploads
-it as the `origen-debug-apk` artifact:
+`.github/workflows/android.yml` runs on every pull request and push to `main`.
+Each run:
+
+1. fails if anything but the built bundle would be packaged — no sources,
+   source maps, tests, environment files or key material;
+2. builds the debug APK, checks that it requests only network permissions and
+   carries the expected application id, and uploads it as `origen-debug-apk`;
+3. builds the release APK **and** the release AAB, so the release variant is
+   never an untested code path.
 
 ```bash
 gh run list --workflow android.yml
 gh run download <run-id> -n origen-debug-apk
 ```
 
-Running the workflow manually with **release** checked also builds a release
-APK (see [Release signing](#release-signing)).
+When signing is configured the release step additionally verifies the APK with
+`apksigner`, re-checks its permissions and application id, refuses an APK
+signed with a debug key, and uploads `origen-release-apk` (the signed APK plus
+the AAB). When signing is not configured it says so in the log instead of
+producing something that looks releasable.
 
 ## Where the APK is
 
@@ -174,9 +183,15 @@ Add these repository secrets (Settings → Secrets and variables → Actions):
 | `ORIGEN_KEY_ALIAS` | key alias, e.g. `origen` |
 | `ORIGEN_KEY_PASSWORD` | key password |
 
-Then run the **Android** workflow manually with **release** checked. The
-keystore is decoded into the runner's temporary directory for the build and
-deleted afterwards. Workflows triggered from forks do not receive secrets.
+The next run of the **Android** workflow picks the credentials up
+automatically. The keystore is decoded into the runner's temporary directory
+for the build and deleted afterwards, and never reaches the log or the
+repository. Workflows triggered from forks do not receive secrets, so their
+release APK is unsigned.
+
+Google Play requires an Android App Bundle for a new listing; the workflow
+builds one alongside the APK. For direct distribution outside Play, the signed
+APK is enough.
 
 ## Versioning
 
@@ -224,9 +239,9 @@ No storage, camera, location or contacts permissions are requested, and the
 manifest strips broad storage permissions even if a future dependency asks for
 them. The Android CI workflow fails if the built APK requests any other permission.
 
-- The theme choice and community-dialog dismissal are persisted (Capacitor
-  Preferences). Inputs, results and recent lookups live in memory and are gone
-  when the app is closed.
+- The theme choice is the only thing persisted (Capacitor Preferences). Inputs,
+  results, recent lookups and the community-dialog dismissal live in memory and
+  are gone when the app is closed.
 - Exports are written to the app's private cache (`cache/exports/`) and handed
   to the Android share sheet through a `FileProvider` scoped to that folder.
 - Cloud backup and device-to-device transfer are disabled
@@ -257,9 +272,16 @@ or the contrast ratios drift apart.
 ## Mobile behaviour
 
 - **Navigation**: a persistent bottom bar with an icon and label for each tool.
-  Tool screens are created on first visit and stay alive, so switching tabs
-  never loses typed input. Rapid repeated taps are ignored; tapping the current
-  tab scrolls it to the top.
+  Swiping left or right across the screen moves between the same four
+  destinations; the bottom bar is always available for anyone who would rather
+  tap. Tool screens are created on first visit and stay alive, so switching
+  tabs never loses typed input. Rapid repeated taps are ignored; tapping the
+  current tab scrolls it to the top. Swiping stops at both ends rather than
+  wrapping, gives way to any vertical scroll, and never starts from a control,
+  input or link. The transition is dropped when reduced motion is on.
+- **Help**: Settings → *How to use ORIGEN* opens a local Help screen (`#/help`).
+  It is reachable by routing but has no bottom-navigation tab of its own, and
+  Back returns to Settings. It renders without any network request.
 - **Back**: closes an open sheet first, then leaves a secondary view (Generator
   results, Sorter result) or cancels a running lookup, then returns to
   Generator, and finally leaves the app. Tabs never build up a history stack.
@@ -280,12 +302,18 @@ or the contrast ratios drift apart.
 - **Startup**: no timed splash screen. The window is charcoal from the first
   frame, and the system splash on Android 12+ is dismissed as soon as the app
   draws.
-- **Community**: on the first launch, a dismissible dialog offers two Telegram
-  invites. Close, Maybe later, Back, backdrop, Escape or choosing an invite
-  saves a single `community.dismissed.v1` flag in Preferences; later launches
-  do not show it again. Navigation never reopens it. If preferences cannot be
-  read or saved, the dialog can still be closed and stays closed for this app
-  session (but may return on a future launch). Clearing app data resets it.
+- **Community**: every fresh launch shows a dismissible dialog offering two
+  Telegram invites. The decision to show it is local startup logic — no API
+  call, network connection, authentication or remote flag — so it behaves the
+  same online and offline. Close, Maybe later, Back, backdrop, Escape or
+  choosing an invite dismisses it for that session, and nothing is written to
+  storage, so the next fresh launch shows it again.
+  A session is one live process: backgrounding the app and returning from
+  Recents keeps the process, so the dialog stays dismissed; Android starting a
+  new process shows it again. Navigation and screen remounts never reopen it.
+  Each invite goes through normal Android external-link handling, so Telegram
+  opens when installed and the browser opens the invite when it is not. If
+  nothing can handle the link, the dialog still closes and the app carries on.
 
 ## Project layout
 
@@ -301,7 +329,7 @@ src/mobile/
   platform/                Platform contracts with Capacitor and browser implementations
   services/bin-service.ts  Guison adapter: offline check, retry, cancellation
   logic/sorter-session.ts  Card Sorter state over the shared transforms
-  tools/                   Generator, BIN Lookup, Card Sorter, Settings
+  tools/                   Generator, BIN Lookup, Card Sorter, Settings, Help
   ui/                      DOM helpers, components, sheets, toasts
   styles/mobile.css        Mobile design system
 android/                   Native Android project (Gradle)
@@ -316,12 +344,15 @@ npm run test:coverage       # with coverage thresholds
 npm run test:e2e:android    # Playwright against the production mobile bundle
 ```
 
-Unit tests cover the registry, navigation and Back handling, the shell
-(offline startup without network requests, tab state, error containment), each
-tool, the BIN service, theme, keyboard detection and the browser adapters. The
-Playwright `android` project runs a Pixel 7-sized viewport against the same
-files that go into the APK and checks the CSP, offline behaviour, touch target
-sizes, overflow, safe areas, the keyboard layout and reduced motion.
+Unit tests cover the registry, navigation, Back handling and swipe detection,
+the shell (offline startup without network requests, tab state, error
+containment), each tool, the Help content, the BIN service, theme, keyboard
+detection, the browser adapters, and the Android packaging and release
+configuration. The Playwright `android` project runs a Pixel 7-sized viewport
+against the same files that go into the APK and checks the CSP, offline
+behaviour, touch target sizes, overflow, safe areas, the keyboard layout,
+reduced motion, the swipe gesture, the launch-prompt lifecycle, Settings and
+Help.
 
 ## Limitations
 
