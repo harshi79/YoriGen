@@ -138,4 +138,11 @@ describe("release build and signing", () => {
     expect(workflow).toContain("docs/ANDROID.md#release-signing");
     expect(workflow).not.toContain("keytool -genkeypair");
   });
+
+  it("uploads a freshly built final APK with the requested download names", () => {
+    expect(workflow).toContain("name: ORIGENFINAL");
+    expect(workflow).toContain("ORIGEN FINAL APK.apk");
+    expect(workflow).toContain("io.github.harshi79.origen");
+    expect(workflow).toContain("ORIGENFINAL contains a debug APK, not a signed release APK");
+  });
 });

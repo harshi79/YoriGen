@@ -503,10 +503,10 @@ describe("Settings tool", () => {
       expect(link.rel).toBe("noopener noreferrer");
       expect(link.href).toMatch(/^https:\/\//);
     }
-    // Every public link the config ships is reachable from Settings. A config
-    // entry that is never rendered is dead weight, so pin the rendered set to it.
+    // The community channel is the only external link in Settings.
     const config = createConfig({}, "9.9.9");
-    expect(links.map((link) => link.href)).toEqual([config.communityUrl, config.sourceUrl]);
+    expect(links.map((link) => link.href)).toEqual([config.communityUrl]);
+    expect(links.map((link) => link.textContent)).toEqual(["ORIGEN channel on Telegram"]);
   });
 
   it("opens the Help page from Settings", async () => {

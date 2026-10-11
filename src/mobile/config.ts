@@ -12,7 +12,6 @@ export interface AppConfig {
   readonly binApiOrigin: string;
   readonly binApiLabel: string;
   readonly communityUrl: string;
-  readonly sourceUrl: string;
 }
 
 /** Accepts only a bare HTTPS origin; anything else falls back to the default. */
@@ -36,7 +35,6 @@ export function createConfig(env: { VITE_ORIGEN_BIN_API_ORIGIN?: string } = {}, 
     binApiOrigin: origin,
     binApiLabel: origin === GUISON_ORIGIN ? "Guison API" : new URL(origin).host,
     communityUrl: "https://t.me/+y8EekRvqpnQzNjZl",
-    sourceUrl: "https://github.com/harshi79/YoriGen",
   };
 }
 

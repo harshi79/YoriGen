@@ -564,15 +564,16 @@ test.describe("Settings layout", () => {
     expect(small).toEqual([]);
   });
 
-  test("external links leave the app and in-app rows navigate", async ({ page }) => {
+  test("keeps the community link, removes the source link, and preserves in-app navigation", async ({ page }) => {
     await nav(page, "settings").tap();
     const links = screen(page, "settings").locator("a.setting-row-link");
-    await expect(links).toHaveCount(2);
-    for (const link of await links.all()) {
-      await expect(link).toHaveAttribute("href", /^https:\/\//);
-      await expect(link).toHaveAttribute("target", "_blank");
-      await expect(link).toHaveAttribute("rel", "noopener noreferrer");
-    }
+    await expect(links).toHaveCount(1);
+    await expect(links.first()).toContainText("ORIGEN channel on Telegram");
+    await expect(links.first()).toHaveAttribute("href", "https://t.me/+y8EekRvqpnQzNjZl");
+    await expect(links.first()).toHaveAttribute("target", "_blank");
+    await expect(links.first()).toHaveAttribute("rel", "noopener noreferrer");
+    await expect(screen(page, "settings")).not.toContainText(/source code|source on github/i);
+    await expect(screen(page, "settings").locator('a[href*="github.com"]')).toHaveCount(0);
     await page.locator("#settings-open-help").tap();
     await expect(page.locator("#app-title")).toHaveText("Help");
   });
