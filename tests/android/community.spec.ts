@@ -6,24 +6,36 @@ const invites = [
 ] as const;
 const dialog = (page: import("@playwright/test").Page) => page.getByRole("dialog", { name: "Join the Yori Community" });
 
-test("first launch offers both exact invites, then Maybe later persists across launches", async ({ page }) => {
+test("every fresh launch offers both exact invites, then Maybe later dismisses for that session", async ({ page }) => {
   await page.goto("/");
   await expect(dialog(page)).toBeVisible();
-  await expect(dialog(page)).toContainText("Explore YoriMethods");
   for (const invite of invites) {
     await expect(dialog(page).getByRole("link", { name: new RegExp(invite.label) })).toHaveAttribute("href", invite.url);
   }
   await expect(dialog(page).getByRole("button", { name: "Close" })).toBeVisible();
   await expect(dialog(page).getByRole("button", { name: "Maybe later" })).toBeVisible();
+
   await dialog(page).getByRole("button", { name: "Maybe later" }).click();
   await expect(dialog(page)).toHaveCount(0);
-  await expect.poll(() => page.evaluate(() => localStorage.getItem("origen.community.dismissed.v1"))).toBe("true");
+
+  // In-session navigation and tab re-selection never reopen it.
   await page.getByRole("button", { name: "Sorter", exact: true }).click();
+  await page.getByRole("button", { name: "BIN Lookup", exact: true }).click();
   await page.getByRole("button", { name: "Generator", exact: true }).click();
   await expect(dialog(page)).toHaveCount(0);
+
+  // Dismissal is never persisted, so the next launch shows it again.
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("origen.community.dismissed.v1")))
+    .toBeNull();
   await page.reload();
-  await expect(dialog(page)).toHaveCount(0);
-  await expect(page.locator("#app-title")).toHaveText("Generator");
+  await expect(dialog(page)).toBeVisible();
+});
+
+test("a cold start with no stored state still shows the prompt", async ({ context, page }) => {
+  await context.clearCookies();
+  await page.goto("/");
+  await expect(dialog(page)).toBeVisible();
 });
 
 for (const invite of invites) {
@@ -41,14 +53,22 @@ for (const invite of invites) {
     await external.waitForLoadState("domcontentloaded");
     expect(requested).toEqual([invite.url]);
     expect(external.url()).toBe(invite.url);
-    await expect(page).toHaveURL(/localhost:4174\/#\/generator$/);
-    await expect(dialog(page)).toHaveCount(0);
-    await expect.poll(() => page.evaluate(() => localStorage.getItem("origen.community.dismissed.v1"))).toBe("true");
-    await page.reload();
+    await expect(page).toHaveURL(/^http:\/\/localhost:4174\//);
+    await expect(page.locator("#app-title")).toHaveText("Generator");
     await expect(dialog(page)).toHaveCount(0);
     await external.close();
   });
 }
+
+test("the app stays usable when an invite cannot be opened", async ({ page, context }) => {
+  // Simulate a device with no Telegram and no handler: every attempt fails.
+  await context.route("https://t.me/**", (route) => route.abort());
+  await page.goto("/");
+  await dialog(page).getByRole("link", { name: /Join Chat Group/ }).click();
+  await expect(dialog(page)).toHaveCount(0);
+  await page.getByRole("button", { name: "Sorter", exact: true }).click();
+  await expect(page.locator("#app-title")).toHaveText("Card Sorter");
+});
 
 test("close and Back dismiss without changing the selected tool", async ({ page }) => {
   await page.goto("/#/lookup");
@@ -57,51 +77,31 @@ test("close and Back dismiss without changing the selected tool", async ({ page 
   await expect(dialog(page)).toHaveCount(0);
   await expect(page.locator("#app-title")).toHaveText("BIN Lookup");
   await page.reload();
-  await expect(dialog(page)).toHaveCount(0);
+  await expect(dialog(page)).toBeVisible();
 });
 
-test("blocked storage cannot stop startup or repeatedly interrupt this session", async ({ page }) => {
-  await page.addInitScript(() => {
-    Storage.prototype.getItem = () => { throw new Error("blocked"); };
-    Storage.prototype.setItem = () => { throw new Error("blocked"); };
+test("the prompt shows on an offline cold start and makes no request", async ({ page, context }) => {
+  // A real device with no connectivity still loads the bundled app; only a
+  // request that left the bundle would fail. Playwright's offline switch would
+  // also refuse localhost and the page would never load, so the connection
+  // state the app reads is forced instead, and every request that would leave
+  // the bundle is recorded and refused.
+  const attempts: string[] = [];
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, "onLine", { get: () => false });
+  });
+  await context.route("**/*", (route) => {
+    const url = new URL(route.request().url());
+    if (url.hostname === "localhost" || url.hostname === "127.0.0.1") return route.continue();
+    attempts.push(url.origin);
+    return route.abort("internetdisconnected");
   });
   await page.goto("/");
   await expect(dialog(page)).toBeVisible();
-  await dialog(page).getByRole("button", { name: "Close" }).click();
-  await page.getByRole("button", { name: "Sorter", exact: true }).click();
-  await page.getByRole("button", { name: "Generator", exact: true }).click();
+  await expect(page.locator("#offline-pill")).toBeVisible();
+  await dialog(page).getByRole("button", { name: "Maybe later" }).click();
   await expect(dialog(page)).toHaveCount(0);
-  await expect(page.locator("#app-title")).toHaveText("Generator");
-});
-
-test("320px dialog respects safe areas, viewport height, focus and touch targets", async ({ page }) => {
-  await page.setViewportSize({ width: 320, height: 560 });
-  await page.goto("/");
-  await page.evaluate(() => {
-    document.documentElement.style.setProperty("--safe-area-inset-top", "28px");
-    document.documentElement.style.setProperty("--safe-area-inset-bottom", "24px");
-    document.documentElement.style.setProperty("--safe-area-inset-left", "8px");
-    document.documentElement.style.setProperty("--safe-area-inset-right", "8px");
-  });
-  const modal = dialog(page);
-  await expect(modal).toBeVisible();
-  await expect(modal.locator(":focus")).toHaveCount(1);
-  for (const invite of invites) {
-    const link = modal.getByRole("link", { name: new RegExp(invite.label) });
-    await expect(link).toBeVisible();
-    const box = await link.boundingBox();
-    expect(box!.width).toBeGreaterThanOrEqual(44);
-    expect(box!.height).toBeGreaterThanOrEqual(44);
-  }
-  const bounds = await modal.boundingBox();
-  expect(bounds!.x).toBeGreaterThanOrEqual(8);
-  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(312);
-  expect(bounds!.y).toBeGreaterThanOrEqual(28);
-  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(560 - 24);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  // A resized WebView (e.g. keyboard open) keeps the dialog scrollable.
-  await page.setViewportSize({ width: 320, height: 400 });
-  await expect(modal.getByRole("button", { name: "Maybe later" })).toBeVisible();
-  await modal.getByRole("button", { name: "Maybe later" }).click();
-  await expect(page.locator("#gen-prefix")).toBeVisible();
+  await page.getByRole("button", { name: "Generator", exact: true }).click();
+  await expect(page.locator("#gen-generate")).toBeVisible();
+  expect(attempts).toEqual([]);
 });

@@ -54,9 +54,17 @@ describe("ToolRegistry", () => {
 describe("default registry", () => {
   const registry = createDefaultRegistry();
 
-  it("registers the four ORIGEN tools in navigation order", () => {
-    expect(registry.ids()).toEqual(["generator", "lookup", "sorter", "settings"]);
+  it("registers the ORIGEN tools in navigation order", () => {
+    expect(registry.ids()).toEqual(["generator", "lookup", "sorter", "settings", "help"]);
     expect(START_TOOL).toBe("generator");
+  });
+
+  it("keeps Help routable but out of the bottom navigation", () => {
+    expect(registry.has("help")).toBe(true);
+    expect(registry.get("help").navHidden).toBe(true);
+    expect(registry.navList().map((entry) => entry.id)).toEqual(["generator", "lookup", "sorter", "settings"]);
+    // Every nav-visible tool is still in the full list, in the same order.
+    expect(registry.list().filter((entry) => !entry.navHidden)).toEqual(registry.navList());
   });
 
   it("marks only BIN Lookup as needing the network", () => {

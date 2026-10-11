@@ -43,8 +43,9 @@ async function boot() {
     });
     document.documentElement.classList.add("ready");
     // Community is a launch prompt, not a tool or a navigation destination.
-    // Do not wait for storage before letting the shell become usable.
-    void createCommunityPrompt(platform.storage, shell.context.ui.sheets, platform.kind).showIfNeeded();
+    // It is local startup logic: no storage read, no network, nothing to await,
+    // so the shell is already usable by the time it opens.
+    createCommunityPrompt(shell.context.ui.sheets, platform.kind).showIfNeeded();
   } catch (error) {
     renderFatal(host, error);
   }

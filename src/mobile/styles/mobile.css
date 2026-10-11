@@ -5,7 +5,7 @@
  * scale stays consistent across tools. Two rules apply everywhere:
  *
  *   1. Content is authored in sentence case. Uppercase is presentation only
- *      and lives in CSS (`.brand-name`, `.badge`, `.eyebrow`), so screen
+ *      and lives in CSS (`.brand-name`, `.badge`), so screen
  *      readers, search and copy/paste all see the real text.
  *   2. Nothing derived from a person or a service is ever re-cased — user
  *      input, generated fixtures, BIN metadata, hostnames and URLs keep the
@@ -23,7 +23,7 @@
   /* Type — size scale. One step per role that appears in the app. Named
      --size-* so it never collides with --text, the ink colour. */
   --size-micro: 10px; /* fixture tag */
-  --size-label: 11px; /* wordmark, badges, eyebrows */
+  --size-label: 11px; /* wordmark, badges */
   --size-caption: 12px; /* nav labels, code, stat labels, status pills */
   --size-note: 13px; /* hints, metadata, footnotes */
   --size-body: 14px; /* body copy, fields, notices */
@@ -56,7 +56,7 @@
   --tracking-normal: 0.01em; /* nav labels, monospaced data */
   --tracking-wide: 0.06em; /* badges, the large BIN input */
   --tracking-micro: 0.08em; /* micro-labels set in monospace */
-  --tracking-label: 0.14em; /* eyebrows */
+  --tracking-label: 0.14em; /* wordmark, badges */
   --tracking-logotype: 0.16em; /* the ORIGEN wordmark */
 
   --bg: #101210;
@@ -294,6 +294,12 @@ svg {
   position: relative;
   min-height: 0;
   overflow: hidden;
+  /* Vertical panning stays with the browser; horizontal travel is the swipe
+     gesture between destinations. Keeping this here avoids any preventDefault
+     fight with the scroller. Touches that land outside a scroller — the sticky
+     header, the back row — are covered by this rule; the rest by the matching
+     rule on .screen-scroll. */
+  touch-action: pan-y;
 }
 .screen-host {
   position: absolute;
@@ -310,6 +316,40 @@ svg {
     opacity: 1;
   }
 }
+/* Directional reveal for a swipe or a bottom-navigation change. Short and
+   restrained: a small offset plus a fade, never a full-screen slide. The
+   reduced-motion block below collapses both to nothing. */
+.screen-host.screen-in-forward,
+.screen-host.screen-in-backward {
+  animation-duration: 200ms;
+  animation-timing-function: var(--ease);
+}
+.screen-host.screen-in-forward {
+  animation-name: screen-slide-forward;
+}
+.screen-host.screen-in-backward {
+  animation-name: screen-slide-backward;
+}
+@keyframes screen-slide-forward {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes screen-slide-backward {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 .screen {
   display: flex;
   flex-direction: column;
@@ -322,6 +362,13 @@ svg {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* The browser resolves touch-action only up to the nearest scrollable
+     ancestor, which is this element — the `pan-y` on .screens is beyond that
+     boundary and is not consulted. Without it here the scroller defaults to
+     `auto`, claims the horizontal travel as a pan and cancels the pointer
+     stream, so the swipe between destinations never reaches its listener.
+     Vertical scrolling is unaffected: pan-y still allows it. */
+  touch-action: pan-y;
   padding: 0 16px 24px;
   scroll-padding-top: 72px;
   scroll-padding-bottom: 24px;
@@ -511,13 +558,6 @@ svg {
   font-size: var(--size-note);
   text-align: center;
 }
-.eyebrow {
-  color: var(--faint);
-  font-size: var(--size-label);
-  font-weight: var(--weight-label);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-}
 .status-row {
   display: flex;
   align-items: center;
@@ -682,8 +722,9 @@ select.control {
   background: var(--input);
 }
 .segment {
-  min-height: 44px;
-  padding: 6px 10px;
+  min-height: var(--tap);
+  min-width: 48px;
+  padding: 6px 12px;
   border: 0;
   border-radius: 9px;
   background: none;
@@ -734,7 +775,7 @@ select.control {
   color: var(--warn);
 }
 .chip-btn {
-  min-height: 44px;
+  min-height: var(--tap);
   min-width: 52px;
   padding: 8px 14px;
   border: 1px solid var(--border);
@@ -1156,29 +1197,57 @@ select.control {
 }
 
 /* ---------- Settings ---------- */
-.link-list {
+/* ---------- Settings rows ----------
+   One row shape for both in-app navigation and external links, so the two read
+   the same and share a 48px target. The chevron tells them apart. */
+.setting-links {
   display: flex;
   flex-direction: column;
+  margin-top: 4px;
 }
-.list-link {
+.setting-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 52px;
-  padding: 4px 0;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 8px 0;
+  border: 0;
   border-bottom: 1px solid var(--line);
+  background: none;
+  color: var(--text);
+  text-align: left;
   text-decoration: none;
-  font-weight: var(--weight-emphasis);
+  cursor: pointer;
 }
-.list-link:last-child {
+.setting-row:last-child {
   border-bottom: 0;
 }
-.list-link svg {
-  color: var(--muted);
+.setting-row-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
-.plain-list,
-.guide {
+.setting-row-copy strong {
+  font-size: var(--size-title);
+  font-weight: var(--weight-emphasis);
+}
+.setting-row-copy small {
+  color: var(--muted);
+  font-size: var(--size-note);
+  line-height: var(--leading-snug);
+}
+.setting-row-chevron {
+  flex-shrink: 0;
+  color: var(--faint);
+}
+.setting-row-link .setting-row-chevron {
+  width: 18px;
+  height: 18px;
+}
+.plain-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1186,9 +1255,36 @@ select.control {
   color: var(--muted);
   font-size: var(--size-body);
 }
-.plain-list strong,
-.guide strong {
+.plain-list strong {
   color: var(--text);
+}
+
+/* ---------- Help ---------- */
+.help-lede {
+  color: var(--text);
+  font-size: var(--size-body);
+  line-height: var(--leading-relaxed);
+}
+.help-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: var(--size-body);
+  line-height: var(--leading-relaxed);
+}
+.help-steps li {
+  padding-left: 4px;
+}
+.help-steps strong {
+  color: var(--text);
+  font-weight: var(--weight-label);
+}
+.help-steps li::marker {
+  color: var(--accent);
+  font-weight: var(--weight-label);
 }
 
 /* ---------- Option list (sheets) ---------- */
@@ -1394,9 +1490,6 @@ select.control {
 .community-emblem svg {
   width: 26px;
   height: 26px;
-}
-.community-eyebrow {
-  margin: 20px 0 10px;
 }
 .community-invites {
   display: grid;

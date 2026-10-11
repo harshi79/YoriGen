@@ -43,6 +43,12 @@ export interface ToolDefinition {
   readonly description: string;
   readonly icon: IconNode;
   readonly network: NetworkRequirement;
+  /**
+   * Reachable by routing and Back handling, but not shown in the bottom
+   * navigation. Use for supporting screens such as Help, which are opened from
+   * another screen rather than competing for a permanent tab.
+   */
+  readonly navHidden?: boolean;
   /** Builds the screen. Called lazily, at most once per app session. */
   create(context: ToolContext): ToolScreen;
 }
@@ -78,6 +84,11 @@ export class ToolRegistry {
   /** Tools in registration order, which is also the navigation order. */
   list(): readonly ToolDefinition[] {
     return [...this.tools.values()];
+  }
+
+  /** Destinations shown in the bottom navigation, in navigation order. */
+  navList(): readonly ToolDefinition[] {
+    return this.list().filter((tool) => !tool.navHidden);
   }
 
   ids(): string[] {

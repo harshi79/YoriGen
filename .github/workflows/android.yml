@@ -5,11 +5,6 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
-    inputs:
-      release:
-        description: "Also build a release APK (signed only if signing secrets are configured)"
-        type: boolean
-        default: false
 
 concurrency:
   group: android-${{ github.ref }}
@@ -18,11 +13,16 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  BUILD_TOOLS: "36.0.0"
+
 jobs:
   apk:
     name: Build APK
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
+    outputs:
+      signed: ${{ steps.signing.outputs.signed }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,15 +52,52 @@ jobs:
       - name: Build web bundle and sync Capacitor
         run: npm run android:sync
 
+      # ---------------------------------------------------------------------
+      # Source privacy. The APK is a compiled artifact: it must carry the built
+      # bundle and nothing else. No sources, no maps, no tests, no VCS metadata,
+      # no environment files, no signing material.
+      #
+      # Note that this keeps the APK free of accidental inclusions. It is not a
+      # claim that a shipped APK cannot be inspected — anyone can unpack one.
+      # ---------------------------------------------------------------------
+      - name: Assert the packaged payload holds no sources or secrets
+        run: |
+          set -euo pipefail
+          PAYLOAD=android/app/src/main/assets
+          echo "Packaged files:"
+          find "$PAYLOAD" -type f | sort
+          bad=$(find "$PAYLOAD" -type f \
+            \( -name '*.map' -o -name '*.ts' -o -name '*.tsx' -o -name '*.jsx' \
+               -o -name '*.test.*' -o -name '*.spec.*' -o -name '*__tests__*' \
+               -o -name '.env*' -o -name '*.jks' -o -name '*.keystore' \
+               -o -name 'keystore.properties*' -o -name 'google-services.json' \
+               -o -name '*.pem' -o -name '*.p12' -o -name 'id_rsa*' \) | sort)
+          if [ -n "$bad" ]; then
+            echo "::error::Refusing to package these files: $bad"
+            exit 1
+          fi
+          if find "$PAYLOAD" -type d -name '.git' | grep -q .; then
+            echo "::error::.git must never be packaged"
+            exit 1
+          fi
+          # The production bundle is built with sourcemap: false; prove it.
+          if grep -rl "sourceMappingURL" "$PAYLOAD/public" >/dev/null 2>&1; then
+            echo "::error::A packaged asset references a source map"
+            exit 1
+          fi
+          echo "Payload is clean ($(du -sh "$PAYLOAD" | cut -f1))."
+
       - name: Assemble debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
-      # Fails the build if the APK asks for anything beyond network access.
-      - name: Inspect APK
+      # Fails the build if the APK asks for anything beyond network access, and
+      # records the identity the artifact actually carries.
+      - name: Inspect debug APK
         run: |
+          set -euo pipefail
           APK=android/app/build/outputs/apk/debug/app-debug.apk
-          AAPT2="$ANDROID_HOME/build-tools/36.0.0/aapt2"
+          AAPT2="$ANDROID_HOME/build-tools/$BUILD_TOOLS/aapt2"
           "$AAPT2" dump badging "$APK" | grep -E "^(package|sdkVersion|targetSdkVersion|application-label):"
           "$AAPT2" dump permissions "$APK"
           unexpected=$("$AAPT2" dump permissions "$APK" \
@@ -69,6 +106,10 @@ jobs:
             | grep -v -e '\.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION$' || true)
           if [ -n "$unexpected" ]; then
             echo "::error::Unexpected permissions: $unexpected"
+            exit 1
+          fi
+          if ! "$AAPT2" dump badging "$APK" | grep -q "package: name='io.github.harshi79.origen'"; then
+            echo "::error::Unexpected application id"
             exit 1
           fi
           ls -l "$APK"
@@ -82,31 +123,92 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
-      # Release builds run only on manual dispatch. The keystore and passwords
-      # come from repository secrets and never touch the repository.
-      - name: Assemble release APK
-        if: github.event_name == 'workflow_dispatch' && inputs.release
-        working-directory: android
+      # ---------------------------------------------------------------------
+      # Release. Built on every run so the release variant is never an untested
+      # code path. The keystore and its passwords come only from repository
+      # secrets; they are decoded into the runner's temp directory and deleted
+      # again, and are never written into the repository or the log.
+      # ---------------------------------------------------------------------
+      - name: Resolve release signing
+        id: signing
         env:
           KEYSTORE_BASE64: ${{ secrets.ORIGEN_KEYSTORE_BASE64 }}
           ORIGEN_KEYSTORE_PASSWORD: ${{ secrets.ORIGEN_KEYSTORE_PASSWORD }}
           ORIGEN_KEY_ALIAS: ${{ secrets.ORIGEN_KEY_ALIAS }}
           ORIGEN_KEY_PASSWORD: ${{ secrets.ORIGEN_KEY_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            export ORIGEN_KEYSTORE_PATH="$RUNNER_TEMP/origen-release.jks"
-            echo "$KEYSTORE_BASE64" | base64 --decode > "$ORIGEN_KEYSTORE_PATH"
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$ORIGEN_KEYSTORE_PASSWORD" ] \
+             && [ -n "$ORIGEN_KEY_ALIAS" ] && [ -n "$ORIGEN_KEY_PASSWORD" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "Release signing is configured."
           else
-            echo "::warning::No signing secrets configured; the release APK will be unsigned."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Release signing is not configured. The release APK will be unsigned and cannot be installed. See docs/ANDROID.md#release-signing."
           fi
-          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Assemble release APK and bundle
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ORIGEN_KEYSTORE_BASE64 }}
+          ORIGEN_KEYSTORE_PASSWORD: ${{ secrets.ORIGEN_KEYSTORE_PASSWORD }}
+          ORIGEN_KEY_ALIAS: ${{ secrets.ORIGEN_KEY_ALIAS }}
+          ORIGEN_KEY_PASSWORD: ${{ secrets.ORIGEN_KEY_PASSWORD }}
+        working-directory: android
+        run: |
+          set -euo pipefail
+          if [ -n "${KEYSTORE_BASE64:-}" ]; then
+            export ORIGEN_KEYSTORE_PATH="$RUNNER_TEMP/origen-release.jks"
+            printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$ORIGEN_KEYSTORE_PATH"
+            chmod 600 "$ORIGEN_KEYSTORE_PATH"
+          fi
+          # The APK is what is distributed directly; the AAB is what Google Play
+          # requires for a new listing. Both come from the same signing config.
+          ./gradlew assembleRelease bundleRelease --no-daemon --stacktrace
           rm -f "$RUNNER_TEMP/origen-release.jks"
 
-      - name: Upload release APK
-        if: github.event_name == 'workflow_dispatch' && inputs.release
+      - name: Verify and inspect the release artifacts
+        run: |
+          set -euo pipefail
+          AAPT2="$ANDROID_HOME/build-tools/$BUILD_TOOLS/aapt2"
+          APKSIGNER="$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner"
+          ls -l android/app/build/outputs/apk/release/ || true
+          ls -l android/app/build/outputs/bundle/release/ || true
+
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          if [ ! -f "$APK" ]; then
+            echo "No signed APK: signing is not configured. Nothing to verify."
+            exit 0
+          fi
+
+          echo "--- identity ---"
+          "$AAPT2" dump badging "$APK" | grep -E "^(package|sdkVersion|targetSdkVersion|application-label):"
+
+          echo "--- permissions ---"
+          "$AAPT2" dump permissions "$APK"
+          unexpected=$("$AAPT2" dump permissions "$APK" \
+            | sed -n "s/^uses-permission: name='\([^']*\)'.*/\1/p" \
+            | grep -v -x -e android.permission.INTERNET -e android.permission.ACCESS_NETWORK_STATE \
+            | grep -v -e '\.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION$' || true)
+          if [ -n "$unexpected" ]; then
+            echo "::error::Unexpected permissions in the release APK: $unexpected"
+            exit 1
+          fi
+
+          echo "--- signature ---"
+          "$APKSIGNER" verify --print-certs --verbose "$APK"
+          # A debug key must never reach a distributable artifact.
+          if "$APKSIGNER" verify --print-certs "$APK" | grep -qi "Android Debug"; then
+            echo "::error::The release APK is signed with a debug key"
+            exit 1
+          fi
+          sha256sum "$APK"
+
+      - name: Upload signed release artifacts
+        if: steps.signing.outputs.signed == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: origen-release-apk
-          path: android/app/build/outputs/apk/release/*.apk
-          retention-days: 14
+          path: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/bundle/release/*.aab
+          retention-days: 30
           if-no-files-found: error

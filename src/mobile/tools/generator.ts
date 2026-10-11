@@ -414,9 +414,8 @@ function createGeneratorScreen(context: ToolContext): ToolScreen {
         resultsBody,
         emptyState({
           iconNode: Layers,
-          eyebrow: "A clean slate",
           title: "No fixtures yet",
-          body: "Configure the builder and tap Generate. Fixtures are created on this device.",
+          body: "Set the builder options and tap Generate test data. Fixtures are created on this device.",
           action: button({ label: "Open builder", iconNode: Wand2, variant: "primary", onClick: () => showView("builder") }),
         }),
       );

@@ -129,7 +129,41 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run browser tests
-        run: npx playwright test --project=desktop --project=mobile --project=android
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: playwright-results.json
+        run: >-
+          npx playwright test --project=desktop --project=mobile --project=android
+          --reporter=list,json
+
+      # Job logs are not readable through the API, so failures are surfaced as
+      # check annotations too, which are.
+      - name: Surface failures as check annotations
+        if: always()
+        run: |
+          node --input-type=module -e '
+          import { readFileSync, existsSync } from "node:fs";
+          if (!existsSync("playwright-results.json")) { console.log("no JSON report written"); process.exit(0); }
+          const report = JSON.parse(readFileSync("playwright-results.json", "utf8"));
+          const failures = [];
+          const walk = (node, trail) => {
+            for (const spec of node.specs ?? []) {
+              for (const test of spec.tests ?? []) {
+                for (const result of test.results ?? []) {
+                  if (result.status !== "failed" && result.status !== "timedOut") continue;
+                  const message = String(result.error?.message ?? "no message")
+                    .replace(/\u001b\[[0-9;]*m/g, "").replace(/[\r\n]+/g, " ").slice(0, 300);
+                  failures.push({ title: `${test.projectName} > ${[...trail, spec.title].join(" > ")}`.slice(0, 200), message });
+                }
+              }
+            }
+            for (const child of node.suites ?? []) walk(child, [...trail, child.title]);
+          };
+          for (const suite of report.suites ?? []) walk(suite, []);
+          console.log(`failed tests: ${failures.length}`);
+          for (const failure of failures.slice(0, 25)) {
+            console.log(`::error title=${failure.title}::${failure.message}`);
+          }
+          '
 
       - name: Upload Playwright report
         if: failure()

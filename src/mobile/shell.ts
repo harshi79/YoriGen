@@ -12,12 +12,13 @@ import type { ToolContext, UiServices } from "./core/context";
 import { EventBus } from "./core/events";
 import { watchKeyboard } from "./core/keyboard";
 import { destinationFromHash, Navigator } from "./core/navigation";
+import { attachSwipe, type SwipeDirection } from "./core/swipe";
 import type { ToolRegistry, ToolScreen } from "./core/registry";
 import type { ThemeController } from "./core/theme";
 import type { PlatformServices } from "./platform/types";
 import type { BinMetadataService } from "./services/bin-service";
 import { errorState } from "./ui/components";
-import { h, icon, replace, scrollBehavior } from "./ui/dom";
+import { h, icon, prefersReducedMotion, replace, scrollBehavior } from "./ui/dom";
 import { createSheets } from "./ui/sheet";
 import { createToaster } from "./ui/toast";
 
@@ -48,6 +49,10 @@ export interface Shell {
 export function mountShell(options: ShellOptions): Shell {
   const { host, registry, platform, config, theme, binService } = options;
   const ids = registry.ids();
+  // Only nav-visible destinations take part in the bottom bar and in swiping.
+  // Screens such as Help stay routable by hash and Back without claiming a tab.
+  const navTools = registry.navList();
+  const navIds = navTools.map((tool) => tool.id);
   const back = new BackDispatcher();
   const events = new EventBus();
   const initial = destinationFromHash(options.hash ?? "", ids, options.startId);
@@ -59,7 +64,7 @@ export function mountShell(options: ShellOptions): Shell {
     "span",
     { class: "offline-pill", id: "offline-pill", role: "status", hidden: true },
     icon(WifiOff),
-    h("span", {}, "Offline · local tools work"),
+    h("span", {}, "Offline · Generator and Sorter still work"),
   );
   const appBar = h(
     "header",
@@ -73,7 +78,7 @@ export function mountShell(options: ShellOptions): Shell {
   const nav = h(
     "nav",
     { class: "bottom-nav", "aria-label": "Main navigation" },
-    ...registry.list().map((tool) => {
+    ...navTools.map((tool) => {
       const item = h(
         "button",
         {
@@ -182,14 +187,28 @@ export function mountShell(options: ShellOptions): Shell {
   }
 
   let visible: string | null = null;
-  function show(id: string) {
+  /**
+   * Reveals a destination. `direction` plays a short directional transition:
+   * the incoming screen slides in from the side the gesture came from. It is
+   * skipped entirely when the user asked the system to reduce motion.
+   */
+  function show(id: string, direction: SwipeDirection | null = null) {
     const tool = registry.get(id);
     if (visible && visible !== id) {
       screens.get(visible)?.deactivate?.();
       container(visible).hidden = true;
     }
     const screen = ensureScreen(id);
-    container(id).hidden = false;
+    const target = container(id);
+    target.hidden = false;
+    if (direction && !prefersReducedMotion()) {
+      const className = direction === "left" ? "screen-in-forward" : "screen-in-backward";
+      target.classList.remove("screen-in-forward", "screen-in-backward");
+      // Force a style flush so re-entering the same screen restarts the run.
+      void target.offsetWidth;
+      target.classList.add(className);
+      target.addEventListener("animationend", () => target.classList.remove(className), { once: true });
+    }
     visible = id;
     title.textContent = tool.title;
     document.title = `${tool.title} · ORIGEN`;
@@ -205,8 +224,16 @@ export function mountShell(options: ShellOptions): Shell {
     navigator.navigate(id);
   }
 
+  /** Left when the destination sits later in the nav order, right when earlier. */
+  function directionBetween(from: string, to: string): SwipeDirection | null {
+    const a = navIds.indexOf(from);
+    const b = navIds.indexOf(to);
+    if (a < 0 || b < 0 || a === b) return null;
+    return b > a ? "left" : "right";
+  }
+
   navigator.subscribe((event) => {
-    if (event.type === "navigate") show(event.to);
+    if (event.type === "navigate") show(event.to, directionBetween(event.from, event.to));
     else screens.get(event.id)?.reselect?.();
   });
 
@@ -227,6 +254,22 @@ export function mountShell(options: ShellOptions): Shell {
     if (overlayHost.querySelector("dialog[open]")) return;
     event.preventDefault();
     handleBack();
+  });
+
+  // ---------- Swipe between destinations ----------
+  // A visible alternative always exists: the bottom navigation, and the
+  // segmented view tabs inside Generator and Card Sorter. Swiping never hides
+  // content that cannot also be reached by a tap.
+  attachSwipe(screensHost, {
+    // An open sheet or dialog owns the gesture; the host is behind it.
+    isEnabled: () => !overlayHost.querySelector("dialog[open]"),
+    onSwipe: (direction) => {
+      const index = navIds.indexOf(navigator.current);
+      // A non-nav screen (Help) or an end of the list has no neighbour.
+      if (index < 0) return;
+      const next = navIds[direction === "left" ? index + 1 : index - 1];
+      if (next) navigator.navigate(next);
+    },
   });
 
   // ---------- Environment ----------

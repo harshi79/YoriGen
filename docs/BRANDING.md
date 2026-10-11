@@ -101,7 +101,7 @@ token, never the literal:
 | Token | Size | Role |
 | --- | --- | --- |
 | `--size-micro` | 10px | Fixture stamp |
-| `--size-label` | 11px | Wordmark, badges, eyebrows |
+| `--size-label` | 11px | Wordmark, badges |
 | `--size-caption` | 12px | Navigation labels, code, statistics labels, status pill |
 | `--size-note` | 13px | Hints, metadata rows, footnotes |
 | `--size-body` | 14px | Body copy, field labels, notices, buttons on the action bar |
@@ -119,7 +119,7 @@ Weights:
 | `--weight-regular` | 400 | Body copy |
 | `--weight-medium` | 500 | De-emphasised values |
 | `--weight-emphasis` | 550 | Data values, list links, toasts |
-| `--weight-label` | 600 | Field labels, badges, navigation labels, eyebrows |
+| `--weight-label` | 600 | Field labels, badges, navigation labels |
 | `--weight-title` | 650 | Card, state, sheet and app-bar titles; primary buttons |
 | `--weight-logotype` | 700 | The ORIGEN wordmark only |
 
@@ -134,7 +134,7 @@ Line height: `--leading-tight` 1.25 (single-line headings), `--leading-snug`
 Letter spacing: `--tracking-tight` −0.01em (headings), `--tracking-normal`
 0.01em (navigation labels, monospaced data), `--tracking-wide` 0.06em (badges,
 the large BIN input), `--tracking-micro` 0.08em (the fixture stamp),
-`--tracking-label` 0.14em (eyebrows), `--tracking-logotype` 0.16em (the
+`--tracking-label` 0.14em (badges), `--tracking-logotype` 0.16em (the
 wordmark). Tracking is dropped to `0` below 360 px so the navigation labels
 still fit.
 
@@ -148,10 +148,11 @@ Two rules, both enforced by tests.
 
 1. **Content is authored in sentence case.** Descriptions, tool output,
    placeholders, errors, dialogs, hints and anything a person reads at length
-   are written normally. Uppercase is a CSS treatment, applied by exactly three
-   selectors — `.brand-name` (the wordmark), `.badge` and `.eyebrow` — so it is
+   are written normally. Uppercase is a CSS treatment, applied by exactly two
+   selectors — `.brand-name` (the wordmark) and `.badge` — so it is
    presentation only. Screen readers read the real text, copy-and-paste
    produces the real text, and a translator never has to decode shouting.
+   `src/mobile/brand.test.ts` fails if a third uppercase selector appears.
 
 2. **Nothing derived from a person or a service is re-cased.** User input,
    generated fixtures, BIN metadata, service labels, hostnames and URLs keep
@@ -159,9 +160,9 @@ Two rules, both enforced by tests.
    UI text anywhere in `src/mobile/`; the two remaining `toLowerCase` calls
    build CSS class names and DOM event names.
 
-Badges and eyebrows are the only place caps are appropriate: two-or-three-word
-status micro-labels such as `Step 1`, `Needs internet`, `Works offline`,
-`Session snapshot`, `Not checked` and `A clean slate`. Acronyms stay as
+Badges are the only place caps are appropriate: two-or-three-word status
+micro-labels such as `Step 1`, `Needs internet`, `Works offline`,
+`Session snapshot` and `Not checked`. Acronyms stay as
 acronyms (`BIN`, `IIN`, `CVV`, `JSON`), and `SYNTHETIC TEST FIXTURE` stays
 uppercase because it is a fixed stamp shared with the web product's exports,
 not a sentence.

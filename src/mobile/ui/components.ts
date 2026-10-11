@@ -3,7 +3,21 @@
  * spacing, touch targets, empty/error states and accessibility wiring.
  */
 import { CircleAlert, RefreshCw } from "lucide";
+import type { PlatformKind } from "../platform/types";
 import { h, icon, uniqueId, type Child, type IconNode } from "./dom";
+
+/**
+ * Attributes for a link that leaves the app.
+ *
+ * Android's Capacitor WebView hands same-window HTTPS navigation to ACTION_VIEW,
+ * so the target app opens when it is installed and the browser opens the URL
+ * when it is not. Adding `target="_blank"` there is unnecessary, so it is only
+ * applied in a browser preview, where it keeps the tools open in this tab.
+ * One definition, used by every external link in the app.
+ */
+export function externalLinkAttrs(kind: PlatformKind): Record<string, string> {
+  return kind === "web" ? { target: "_blank", rel: "noopener noreferrer" } : {};
+}
 
 export function card(options: { title?: string; badge?: string; className?: string; iconNode?: IconNode }, ...children: Child[]) {
   const headingId = options.title ? uniqueId("card") : undefined;
@@ -125,12 +139,11 @@ export function selectControl<T extends string>(id: string, choices: readonly { 
   );
 }
 
-export function emptyState(options: { iconNode: IconNode; title: string; body: string; action?: HTMLElement; eyebrow?: string }) {
+export function emptyState(options: { iconNode: IconNode; title: string; body: string; action?: HTMLElement }) {
   return h(
     "div",
     { class: "state state-empty" },
     h("div", { class: "state-icon" }, icon(options.iconNode)),
-    options.eyebrow ? h("span", { class: "eyebrow" }, options.eyebrow) : null,
     h("h3", { class: "state-title" }, options.title),
     h("p", { class: "state-body" }, options.body),
     options.action ?? null,

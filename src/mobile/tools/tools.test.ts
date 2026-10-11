@@ -501,7 +501,30 @@ describe("Settings tool", () => {
       expect(link.rel).toBe("noopener noreferrer");
       expect(link.href).toMatch(/^https:\/\//);
     }
-    click("#settings-guide");
-    expect($("dialog[open]").textContent).toContain("Luhn");
+  });
+
+  it("opens the Help page from Settings", async () => {
+    const { shell } = bootShell({ hash: "#/settings" });
+    await flush();
+    expect($("#settings-open-help").textContent).toContain("How to use ORIGEN");
+    click("#settings-open-help");
+    expect(shell.navigator.current).toBe("help");
+    expect($("#app-title").textContent).toBe("Help");
+    // Help never claims a bottom-navigation tab.
+    expect(document.querySelector('.bottom-nav [data-tool="help"]')).toBeNull();
+    expect(document.querySelectorAll(".bottom-nav .nav-item")).toHaveLength(4);
+  });
+
+  it("returns to Settings from Help by button and by Back", async () => {
+    const { shell, pressSystemBack } = bootShell({ hash: "#/settings" });
+    await flush();
+    click("#settings-open-help");
+    expect(shell.navigator.current).toBe("help");
+    click("#help-back");
+    expect(shell.navigator.current).toBe("settings");
+
+    click("#settings-open-help");
+    pressSystemBack();
+    expect(shell.navigator.current).toBe("settings");
   });
 });
