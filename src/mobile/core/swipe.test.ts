@@ -99,29 +99,98 @@ describe("attachSwipe", () => {
     expect(h.onDragStart).not.toHaveBeenCalled(); // a tap-sized wobble is not a drag
     pointer("pointermove", 280, 101);
     expect(h.onDragStart).toHaveBeenCalledWith("left");
-    // The first offset after the lock is zero, so the card starts where it is.
-    expect(h.onDragMove).toHaveBeenLastCalledWith(0);
+    // The first reported offset is the finger's travel from the pointer-down
+    // point, so the card catches up with the slop it took to resolve the axis
+    // and sits under the finger from then on.
+    expect(h.onDragMove).toHaveBeenLastCalledWith(-20);
     pointer("pointermove", 240, 101);
-    expect(h.onDragMove).toHaveBeenLastCalledWith(-40);
+    expect(h.onDragMove).toHaveBeenLastCalledWith(-60);
     expect(h.onDragEnd).not.toHaveBeenCalled(); // nothing resolves mid-gesture
   });
 
+  it("reports the finger's position exactly, in both directions", () => {
+    const left = handlers();
+    attachSwipe(host, left);
+    pointer("pointerdown", 200, 300);
+    for (const x of [180, 150, 120, 90]) pointer("pointermove", x, 302);
+    expect((left.onDragMove as ReturnType<typeof vi.fn>).mock.calls.map(([offset]) => offset)).toEqual([
+      -20, -50, -80, -110,
+    ]);
+    pointer("pointerup", 90, 302);
+
+    document.body.innerHTML = "";
+    host = document.createElement("div");
+    document.body.append(host);
+    const right = handlers();
+    attachSwipe(host, right);
+    pointer("pointerdown", 200, 300);
+    for (const x of [220, 260, 300]) pointer("pointermove", x, 299);
+    expect(right.onDragStart).toHaveBeenLastCalledWith("right");
+    expect((right.onDragMove as ReturnType<typeof vi.fn>).mock.calls.map(([offset]) => offset)).toEqual([20, 60, 100]);
+  });
+
   it("reports the release with total travel and velocity", () => {
-    vi.spyOn(Date, "now")
-      .mockReturnValueOnce(1000) // pointerdown
-      .mockReturnValueOnce(1010) // move
-      .mockReturnValueOnce(1020) // move
-      .mockReturnValueOnce(1030); // release
+    // A clock the test owns, so the velocity window is exactly the drag's.
+    let clock = 1000;
+    vi.spyOn(performance, "now").mockImplementation(() => clock);
     const onDragEnd = vi.fn();
     attachSwipe(host, handlers({ onDragEnd }));
     pointer("pointerdown", 300, 100);
+    clock = 1010;
     pointer("pointermove", 290, 100);
+    clock = 1020;
     pointer("pointermove", 270, 100);
+    clock = 1030;
     pointer("pointerup", 240, 100);
     expect(onDragEnd).toHaveBeenCalledTimes(1);
     const [release] = onDragEnd.mock.calls[0] as [{ dx: number; velocity: number }];
     expect(release.dx).toBe(-60);
     expect(release.velocity).toBeCloseTo(-2, 5); // (240 - 300) px over 30 ms
+  });
+
+  it("keeps a long, fast drag bounded: the sample buffer saturates instead of growing", () => {
+    const h = handlers();
+    attachSwipe(host, h);
+    pointer("pointerdown", 400, 300);
+    for (let step = 1; step <= 20; step += 1) pointer("pointermove", 400 - step * 4, 300);
+    pointer("pointerup", 320, 300);
+    expect(h.onDragStart).toHaveBeenCalledTimes(1);
+    // More samples than the ring holds: the counter must clamp, so the release
+    // is still measured against the fixed-size buffers.
+    const [release] = (h.onDragEnd as ReturnType<typeof vi.fn>).mock.calls[0] as [{ dx: number }];
+    expect(release.dx).toBe(-80);
+  });
+
+  it("closes the velocity window after a pause, so a held finger cannot fake a flick", () => {
+    let clock = 1000;
+    vi.spyOn(performance, "now").mockImplementation(() => clock);
+    const onDragEnd = vi.fn();
+    attachSwipe(host, handlers({ onDragEnd }));
+    pointer("pointerdown", 400, 300);
+    pointer("pointermove", 380, 300); // locks at once
+    clock = 1150; // the finger rests for well over the 100 ms window
+    pointer("pointermove", 360, 300);
+    clock = 1200;
+    pointer("pointerup", 340, 300);
+    const [release] = onDragEnd.mock.calls[0] as [{ dx: number; velocity: number }];
+    expect(release.dx).toBe(-60);
+    // Only the 1150 -> 1200 ms samples count: -20 px over 50 ms.
+    expect(release.velocity).toBeCloseTo(-0.4, 5);
+  });
+
+  it("never divides by a zero-length sample window", () => {
+    // A coarse platform clock can stamp every sample with the same instant: the
+    // release must read 0 rather than NaN or Infinity.
+    vi.spyOn(performance, "now").mockReturnValue(2000);
+    const onDragEnd = vi.fn();
+    attachSwipe(host, handlers({ onDragEnd }));
+    pointer("pointerdown", 400, 300);
+    pointer("pointermove", 380, 300);
+    pointer("pointermove", 320, 300);
+    pointer("pointerup", 300, 300);
+    const [release] = onDragEnd.mock.calls[0] as [{ dx: number; velocity: number }];
+    expect(release.dx).toBe(-100);
+    expect(release.velocity).toBe(0);
   });
 
   it("hands a mostly vertical gesture back to the page without ever locking", () => {
@@ -156,6 +225,26 @@ describe("attachSwipe", () => {
     drag(host, { x: 300, y: 100 }, { x: 301, y: 100 }, { cancel: true });
     expect(h.onDragCancel).toHaveBeenCalledTimes(1);
     expect(h.onDragEnd).not.toHaveBeenCalled();
+  });
+
+  it("reports nothing for a pointer that lifts before the drag locks", () => {
+    const h = handlers();
+    attachSwipe(host, h);
+    pointer("pointerdown", 300, 100);
+    pointer("pointermove", 300 - (SWIPE_LOCK_SLOP - 3), 100); // under the slop: still a tap
+    pointer("pointerup", 300 - (SWIPE_LOCK_SLOP - 3), 100);
+    // A tap-sized wobble produces no velocity samples and no release callback.
+    expect(h.onDragStart).not.toHaveBeenCalled();
+    expect(h.onDragEnd).not.toHaveBeenCalled();
+  });
+
+  it("ignores a pointercancel that belongs to no live gesture", () => {
+    const h = handlers();
+    attachSwipe(host, h);
+    pointer("pointercancel", 300, 100); // nothing was ever down
+    pointer("pointerdown", 300, 100);
+    pointer("pointercancel", 300, 100, { pointerId: 7 }); // a different pointer
+    expect(h.onDragCancel).not.toHaveBeenCalled();
   });
 
   it("abandons a pre-lock gesture that leaves the host, but keeps a locked one", () => {
@@ -249,6 +338,12 @@ describe("shell swipe navigation", () => {
   });
 
   const host = () => $("#screens");
+
+  /** Fires one pointer event on `element`, x in CSS px, for mid-drag assertions. */
+  const press = (element: HTMLElement) => (type: string, x: number) =>
+    element.dispatchEvent(
+      new PointerEvent(type, { clientX: x, clientY: 300, button: 0, isPrimary: true, bubbles: true }),
+    );
 
   it("swiping left moves to the next destination, right to the previous", async () => {
     const { shell } = bootShell();
@@ -358,6 +453,212 @@ describe("shell swipe navigation", () => {
     expect($('.screen-host[data-screen="lookup"]').hidden).toBe(true);
     expect($('.screen-host[data-screen="lookup"]').classList.contains("stack-under")).toBe(false);
     expect($('.screen-host[data-screen="settings"]').hidden).toBe(false);
+  });
+
+  it("never reads layout while a finger is down", async () => {
+    // The measured bottleneck in the old drag loop: a forced style+layout pass
+    // on every pointermove, because the loop read the host's width after
+    // writing to the DOM. The loop must read nothing at all.
+    const layoutReads = ["clientWidth", "clientHeight", "offsetWidth", "offsetHeight", "scrollWidth", "scrollHeight"];
+    const reads: string[] = [];
+    const originals = new Map<object, Map<string, PropertyDescriptor>>();
+    for (const property of layoutReads) {
+      const owner: object = property.startsWith("offset") ? HTMLElement.prototype : Element.prototype;
+      const descriptor = Object.getOwnPropertyDescriptor(owner, property);
+      if (!descriptor?.get) continue;
+      if (!originals.has(owner)) originals.set(owner, new Map());
+      originals.get(owner)!.set(property, descriptor);
+      Object.defineProperty(owner, property, {
+        configurable: true,
+        get(this: Element) {
+          reads.push(`${this.className || this.nodeName}.${property}`);
+          return descriptor.get!.call(this);
+        },
+      });
+    }
+    const { shell } = bootShell();
+    const element = host();
+    const pointer = (type: string, x: number) =>
+      element.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: 300, button: 0, isPrimary: true, bubbles: true }));
+    pointer("pointerdown", 340);
+    pointer("pointermove", 320);
+    pointer("pointermove", 260);
+    pointer("pointermove", 180);
+    // Reads before the gesture (the shell measuring itself at boot) are fine;
+    // what matters is that the drag itself added none.
+    const duringDrag = reads.length;
+    pointer("pointermove", 120);
+    pointer("pointermove", 60);
+    expect(reads.length).toBe(duringDrag);
+    pointer("pointerup", 60);
+    for (const [owner, properties] of originals) {
+      for (const [property, descriptor] of properties) Object.defineProperty(owner, property, descriptor);
+    }
+    await settle(() => expect(shell.navigator.current).toBe("lookup"));
+  });
+
+  it("gives the staged page a veil, and never a custom property", async () => {
+    // A custom property write invalidates style for the whole subtree behind
+    // the card; a single element opacity does not.
+    const { shell } = bootShell();
+    const element = host();
+    const pointer = (type: string, x: number) =>
+      element.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: 300, button: 0, isPrimary: true, bubbles: true }));
+    pointer("pointerdown", 340);
+    pointer("pointermove", 300);
+    pointer("pointermove", 240);
+    const staged = $('.screen-host[data-screen="lookup"]');
+    const veil = staged.querySelector<HTMLElement>(".screen-veil");
+    expect(veil).not.toBeNull();
+    expect(veil!.style.opacity).not.toBe("");
+    expect(staged.getAttribute("style") ?? "").not.toContain("--");
+    expect(veil!.getAttribute("style") ?? "").not.toContain("--");
+    // The card under the finger carries nothing but its transform.
+    expect($('.screen-host[data-screen="generator"]').getAttribute("style")).toMatch(/^transform: translate3d\(-100px,0,0\);$/);
+    pointer("pointerup", 240);
+    await settle(() => expect(shell.navigator.current).toBe("lookup"));
+  });
+
+  it("abandons a drag when the app goes to the background mid-gesture", async () => {
+    // Android does not guarantee a pointercancel when the WebView is hidden;
+    // a card must never stay parked off-centre because the gesture vanished.
+    const { shell } = bootShell();
+    const element = host();
+    const pointer = (type: string, x: number) =>
+      element.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: 300, button: 0, isPrimary: true, bubbles: true }));
+    pointer("pointerdown", 340);
+    pointer("pointermove", 200);
+    expect($('.screen-host[data-screen="generator"]').style.transform).toContain("translate3d");
+    window.dispatchEvent(new Event("blur"));
+    expect($('.screen-host[data-screen="generator"]').style.transform).toBe("");
+    expect($('.screen-host[data-screen="generator"]').classList.contains("stack-top")).toBe(false);
+    expect($('.screen-host[data-screen="lookup"]').hidden).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(shell.navigator.current).toBe("generator");
+  });
+
+  it("abandons a drag when the WebView reports itself hidden, and not before", async () => {
+    const { shell } = bootShell();
+    const pointer = press(host());
+    const card = () => $('.screen-host[data-screen="generator"]');
+    pointer("pointerdown", 340);
+    pointer("pointermove", 200);
+    try {
+      // A visibility ping that still reports the app visible is no reason to
+      // drop the gesture the finger is making.
+      Object.defineProperty(document, "hidden", { configurable: true, value: false });
+      document.dispatchEvent(new Event("visibilitychange"));
+      expect(card().style.transform).toBe("translate3d(-140px,0,0)");
+      // Android can hide the WebView without a pointercancel. The card must be
+      // put back rather than left parked off-centre.
+      Object.defineProperty(document, "hidden", { configurable: true, value: true });
+      document.dispatchEvent(new Event("visibilitychange"));
+      expect(card().style.transform).toBe("");
+      expect(card().className).toBe("screen-host");
+      expect($('.screen-host[data-screen="lookup"]').hidden).toBe(true);
+    } finally {
+      Reflect.deleteProperty(document, "hidden");
+    }
+    // The release that arrives after the abandonment is not a navigation.
+    pointer("pointerup", 120);
+    await settle(() => expect(shell.navigator.current).toBe("generator"));
+  });
+
+  it("tracks the finger one to one even before any width is known", async () => {
+    // A WebView that reports no host size until its first layout must not turn
+    // the drag into a NaN transform, and the commit still uses the reference
+    // width the gesture layer falls back to.
+    const saved = Object.getOwnPropertyDescriptor(window, "innerWidth");
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 0 });
+    try {
+      const { shell } = bootShell();
+      const pointer = press(host());
+      pointer("pointerdown", 340);
+      pointer("pointermove", 200);
+      expect($('.screen-host[data-screen="generator"]').style.transform).toBe("translate3d(-140px,0,0)");
+      pointer("pointerup", 120); // -220 px: over the commit share of the fallback width
+      await settle(() => expect(shell.navigator.current).toBe("lookup"));
+    } finally {
+      if (saved) Object.defineProperty(window, "innerWidth", saved);
+    }
+  });
+
+  it("springs a live drag back when the host width changes under the finger", async () => {
+    const saved = Object.getOwnPropertyDescriptor(window, "innerWidth");
+    vi.stubGlobal("ResizeObserver", undefined); // an older WebView: the resize fallback
+    try {
+      const { shell } = bootShell();
+      const pointer = press(host());
+      const card = () => $('.screen-host[data-screen="generator"]');
+      pointer("pointerdown", 340);
+      pointer("pointermove", 200);
+      expect(card().style.transform).toBe("translate3d(-140px,0,0)");
+      // A resize that reports the same width changes nothing ...
+      window.dispatchEvent(new Event("resize"));
+      expect(card().style.transform).toBe("translate3d(-140px,0,0)");
+      // ... but a different width makes the captured offset meaningless, so the
+      // card comes back rather than navigating by a distance that no longer
+      // means what it did when the gesture locked.
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: 300 });
+      window.dispatchEvent(new Event("resize"));
+      pointer("pointerup", 120);
+      await settle(() => expect(card().style.transform).toBe(""));
+      expect(shell.navigator.current).toBe("generator");
+    } finally {
+      if (saved) Object.defineProperty(window, "innerWidth", saved);
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("gives a little on a screen with no place in the tab order", async () => {
+    // Help is routable but has no neighbour to reveal: the card resists instead
+    // of staging a page, and the release leaves the destination alone.
+    const { shell } = bootShell({ hash: "#/help" });
+    expect(shell.navigator.current).toBe("help");
+    const help = () => $('.screen-host[data-screen="help"]');
+    const pointer = press(host());
+    pointer("pointerdown", 340);
+    pointer("pointermove", 230);
+    expect(help().style.transform).toBe("translate3d(-27.5px,0,0)"); // 110 px * EDGE_RESISTANCE
+    expect(document.querySelector(".stack-under")).toBeNull();
+    pointer("pointerup", 120);
+    await settle(() => expect(help().style.transform).toBe(""));
+    expect(shell.navigator.current).toBe("help");
+  });
+
+  it("abandons a drag when Back arrives mid-gesture", async () => {
+    const { shell, pressSystemBack } = bootShell();
+    shell.context.navigate("sorter");
+    const element = host();
+    const pointer = (type: string, x: number) =>
+      element.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: 300, button: 0, isPrimary: true, bubbles: true }));
+    pointer("pointerdown", 340);
+    pointer("pointermove", 220);
+    pressSystemBack();
+    // Back wins: the card is dropped and the navigation is the Back one.
+    expect($('.screen-host[data-screen="sorter"]').style.transform).toBe("");
+    expect(shell.navigator.current).toBe("generator");
+    pointer("pointerup", 220);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(shell.navigator.current).toBe("generator");
+  });
+
+  it("pre-builds the neighbouring destinations while the app is idle", async () => {
+    // Nothing may build DOM under a finger: the first swipe of a session was
+    // measurably the worst, because the neighbour screen was created inside the
+    // pointermove handler.
+    vi.useFakeTimers();
+    try {
+      const { shell } = bootShell();
+      expect(shell.screen("lookup")).toBeUndefined(); // not on the critical path
+      vi.advanceTimersByTime(500);
+      expect(shell.screen("lookup")).toBeDefined();
+      // The warmed-up neighbours stay hidden: only the start screen is shown.
+      expect($('.screen-host[data-screen="lookup"]').hidden).toBe(true);
+      expect($('.screen-host:not([hidden])').dataset.screen).toBe("generator");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("reduced motion navigates on release with no preview and no entrance", async () => {

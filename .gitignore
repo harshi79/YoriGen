@@ -145,6 +145,8 @@ vite.config.ts.timestamp-*
 # Browser test artifacts
 /test-results/
 /playwright-report/
+# One JSON line per run, appended by tests/android/swipe-performance.spec.ts.
+/perf-metrics/
 
 # Android (Capacitor)
 dist-android/
