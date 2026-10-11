@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parseMetadata, type BinMetadata } from "../../guison";
 import { BinServiceError, type BinMetadataService } from "../services/bin-service";
+import { createConfig } from "../config";
 import { $, bootShell, flush, typeInto } from "../test-support";
 import { defaultGeneratorValues, generatorOptionsFor } from "./generator";
 import { isPlainTextFile, LOADING_THRESHOLD, MAX_FILE_BYTES } from "./sorter";
@@ -496,11 +497,16 @@ describe("Settings tool", () => {
     expect(text).toContain("9.9.9");
     expect(text).toContain("42");
     expect(text).toContain("Web preview");
-    for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-tool="settings"] a')) {
+    const links = [...document.querySelectorAll<HTMLAnchorElement>('[data-tool="settings"] a')];
+    for (const link of links) {
       expect(link.target).toBe("_blank");
       expect(link.rel).toBe("noopener noreferrer");
       expect(link.href).toMatch(/^https:\/\//);
     }
+    // Every public link the config ships is reachable from Settings. A config
+    // entry that is never rendered is dead weight, so pin the rendered set to it.
+    const config = createConfig({}, "9.9.9");
+    expect(links.map((link) => link.href)).toEqual([config.communityUrl, config.sourceUrl]);
   });
 
   it("opens the Help page from Settings", async () => {
