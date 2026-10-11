@@ -191,7 +191,6 @@ function createSettingsScreen(context: ToolContext): ToolScreen {
         "nav",
         { class: "setting-links", "aria-label": "External links" },
         link(platform.kind, config.communityUrl, "ORIGEN channel on Telegram"),
-        link(platform.kind, config.sourceUrl, "Source code"),
       ),
       h("p", { class: "hint" }, "Synthetic test data for development and QA. Apache License 2.0. BIN data: venelinkochev/bin-list-data, CC BY 4.0, via Guison."),
     ),
