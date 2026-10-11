@@ -212,3 +212,58 @@ jobs:
             android/app/build/outputs/bundle/release/*.aab
           retention-days: 30
           if-no-files-found: error
+
+      # The final download prefers the verified release APK when signing is
+      # configured. Otherwise it contains the freshly built debug APK, clearly
+      # identified in the log rather than being presented as a release build.
+      - name: Prepare final APK download
+        id: final-apk
+        env:
+          SIGNED: ${{ steps.signing.outputs.signed }}
+        run: |
+          set -euo pipefail
+          AAPT2="$ANDROID_HOME/build-tools/$BUILD_TOOLS/aapt2"
+          APKSIGNER="$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner"
+          OUTPUT_DIR="$RUNNER_TEMP/origenfinal"
+          mkdir -p "$OUTPUT_DIR"
+
+          if [ "$SIGNED" = "true" ]; then
+            SOURCE=android/app/build/outputs/apk/release/app-release.apk
+            VARIANT="signed release APK"
+            if [ ! -f "$SOURCE" ]; then
+              echo "::error::Release signing was configured but the signed release APK is missing"
+              exit 1
+            fi
+          else
+            SOURCE=android/app/build/outputs/apk/debug/app-debug.apk
+            VARIANT="debug APK (signed with the Android debug key; release signing is not configured)"
+          fi
+
+          FINAL_APK="$OUTPUT_DIR/ORIGEN FINAL APK.apk"
+          cp "$SOURCE" "$FINAL_APK"
+          echo "--- final APK identity ---"
+          "$AAPT2" dump badging "$FINAL_APK" | grep -E "^(package|sdkVersion|targetSdkVersion|application-label):"
+          if ! "$AAPT2" dump badging "$FINAL_APK" | grep -q "package: name='io.github.harshi79.origen'"; then
+            echo "::error::Unexpected application id in the final APK"
+            exit 1
+          fi
+          echo "--- final APK signature ---"
+          "$APKSIGNER" verify --print-certs --verbose "$FINAL_APK"
+          if [ "$SIGNED" = "true" ] && "$APKSIGNER" verify --print-certs "$FINAL_APK" | grep -qi "Android Debug"; then
+            echo "::error::The final release APK is signed with a debug key"
+            exit 1
+          fi
+          if [ "$SIGNED" != "true" ]; then
+            echo "::warning::ORIGENFINAL contains a debug APK, not a signed release APK."
+          fi
+          echo "APK variant: $VARIANT"
+          sha256sum "$FINAL_APK"
+          echo "variant=$VARIANT" >> "$GITHUB_OUTPUT"
+
+      - name: Upload ORIGENFINAL
+        uses: actions/upload-artifact@v4
+        with:
+          name: ORIGENFINAL
+          path: '${{ runner.temp }}/origenfinal/ORIGEN FINAL APK.apk'
+          retention-days: 30
+          if-no-files-found: error

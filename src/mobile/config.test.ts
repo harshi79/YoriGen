@@ -35,6 +35,6 @@ describe("mobile config", () => {
     const config = createConfig();
     expect(JSON.stringify(config)).not.toMatch(/key|token|secret|password/i);
     expect(config.communityUrl).toMatch(/^https:\/\/t\.me\//);
-    expect(config.sourceUrl).toMatch(/^https:\/\/github\.com\//);
+    expect(config).not.toHaveProperty("sourceUrl");
   });
 });

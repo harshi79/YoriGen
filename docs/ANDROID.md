@@ -71,10 +71,15 @@ Each run:
 2. builds the debug APK, checks that it requests only network permissions and
    carries the expected application id, and uploads it as `origen-debug-apk`;
 3. builds the release APK **and** the release AAB, so the release variant is
-   never an untested code path.
+   never an untested code path;
+4. uploads a one-file `ORIGENFINAL` artifact. It downloads as `ORIGENFINAL.zip`
+   and contains `ORIGEN FINAL APK.apk`. When release signing is configured this
+   is the verified signed release APK; otherwise it is the freshly built debug
+   APK, identified as such in the workflow log (not a signed release build).
 
 ```bash
 gh run list --workflow android.yml
+gh run download <run-id> -n ORIGENFINAL
 gh run download <run-id> -n origen-debug-apk
 ```
 
