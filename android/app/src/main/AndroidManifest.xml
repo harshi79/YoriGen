@@ -17,8 +17,16 @@
         android:usesCleartextTraffic="false"
         android:theme="@style/AppTheme">
 
+        <!--
+          configChanges lists every configuration this activity handles itself.
+          fontScale is included deliberately: without it, changing the system
+          font size recreates the activity, which reloads the WebView and
+          restarts the app from scratch — losing the session and re-showing the
+          launch prompt even though the process never died. Handling it here
+          keeps a font change what it should be: a relayout, not a relaunch.
+        -->
         <activity
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density|fontScale"
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
